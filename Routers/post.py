@@ -54,7 +54,7 @@ def delete_post(post_id: int,
         post = get_post_by_id(db, post_id=post_id)
         user = User.get_current_user_by_token(token)
         user_id = user['id']
-        if post.user_id != user_id:
+        if post.owner_id != user_id:
             raise HTTPException(status_code=403, detail="У вас нет прав на удаление этого поста")
         if post is None:
             raise HTTPException(status_code=404, detail="Пост не найден")
@@ -77,7 +77,7 @@ def update_post(post_id: int,
         post = get_post_by_id(session=db, post_id=post_id)
         user = User.get_current_user_by_token(token)
         user_id = user["id"]
-        if post.user_id != user_id:
+        if post.owner_id != user_id:
             raise HTTPException(status_code=403, detail="У вас нет прав на изменение этого поста")
         if post is None:
             raise HTTPException(status_code=404, detail="Пост не найден")

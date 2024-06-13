@@ -22,7 +22,9 @@ def create_story_endpoint(story: StoryCreateSchema,
                           token: str = Depends(oauth2_scheme),
                           db: Session = Depends(get_db)):
     if verify_token_in_redis(token):
-        return create_story(session=db, story=story, token=token)
+        try:
+            return create_story(session=db, story=story, token=token)
+        except: HTTPException(status_code=404, detail="История не найдена")
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
 
@@ -63,7 +65,7 @@ def delete_story(story_id: int,
         user = User.get_current_user_by_token(token)
         user_id = user['id']
 
-        if story.user_id != user_id:
+        if story.owner_id != user_id:
             raise HTTPException(status_code=403, detail="У вас нет прав на удаление этого поста")
 
         if story is None:
@@ -86,7 +88,7 @@ def update_story(
         story = get_story_by_id(db, story_id=story_id)
         user = User.get_current_user_by_token(token)
         user_id = user["id"]
-        if story.user_id != user_id:
+        if story.owner_id != user_id:
             raise HTTPException(status_code=403, detail="У вас нет прав на изменение этой истории")
         if story is None:
             raise HTTPException(status_code=404, detail="История не найдена")

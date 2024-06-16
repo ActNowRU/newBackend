@@ -2,12 +2,14 @@ from sqlalchemy.orm import Session
 from Models.story import Story
 from Models.user import User
 from Schemas.story import StoryCreateSchema, StoryChangeSchema
+from datetime import datetime
 
 
 def create_story(session: Session, story: StoryCreateSchema, token: str):
     current_user = User.get_current_user_by_token(token)
     owner_id = current_user['id']
-    db_story = Story(**story.dict(), owner_id=owner_id)
+    date_of_creation = datetime.now()
+    db_story = Story(**story.dict(), owner_id=owner_id, date_of_creation=date_of_creation)
     session.add(db_story)
     session.commit()
     session.refresh(db_story)

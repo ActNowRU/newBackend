@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class TagBase(BaseModel):
+    type: str
     name: str
 
 

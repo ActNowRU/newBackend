@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Time, ARRAY
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Time, ARRAY, DateTime
 from sqlalchemy.orm import relationship
 
 from Models.tags import post_tags
@@ -13,6 +13,7 @@ class Post(Base):
     cost = Column(Integer, index=True, nullable=True)
     event_date = Column(Date, index=True)
     event_time = Column(Time, index=True)
+    date_of_creation = Column(DateTime, index=True)
     location = Column(String, index=True)
     description = Column(String, index=True)
     title = Column(String, index=True)

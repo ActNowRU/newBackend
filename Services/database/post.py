@@ -2,12 +2,14 @@ from sqlalchemy.orm import Session
 from Models.post import Post
 from Schemas.post import PostBase
 from Models.user import User
+from datetime import datetime
 
 
 def create_post(session: Session, post: PostBase, token: str):
     curent_user = User.get_current_user_by_token(token)
     owner_id = curent_user['id']
-    db_post = Post(**post.dict(), owner_id=owner_id)
+    date_of_creation = datetime.now()
+    db_post = Post(**post.dict(), owner_id=owner_id, date_of_creation=date_of_creation)
     session.add(db_post)
     session.commit()
     session.refresh(db_post)

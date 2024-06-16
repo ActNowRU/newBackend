@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column,
     String,
     Integer,
-    PrimaryKeyConstraint, ForeignKey, ARRAY
+    PrimaryKeyConstraint, ForeignKey, ARRAY, DateTime
 )
 from sqlalchemy.orm import relationship
 
@@ -17,6 +17,7 @@ class Story(Base):  #
 
     descriptions = Column(String(2550), index=True, nullable=True)
     content = Column(ARRAY(String), index=True, nullable=True)
+    date_of_creation = Column(DateTime, index=True)
 
     tags = relationship("Tags", secondary=story_tags, backref="stories")
 

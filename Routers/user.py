@@ -22,7 +22,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 @router.get("/profile/{username}", response_model=UserSchema)
 def profile(username: str,
             session: Session = Depends(get_db)):
-    return user_db_services.get_user(session=session, user_name=username)
+    try:
+        return user_db_services.get_user(session=session, user_name=username)
+    except:
+        HTTPException(status_code=403, detail="Пользователь не найден")
 
 
 @router.patch("/update/{username}")
@@ -38,8 +41,11 @@ def update_user(username: str,
             raise HTTPException(status_code=403, detail="Вы не имеете прав на изменение этого пользователя")
         if user is None:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
-        user_db_services.change_user(session=db, username=username, user=userscheme)
-        return {"Данные пользователя изменены"}
+        try:
+            user_db_services.change_user(session=db, username=username, user=userscheme)
+            return {"Данные пользователя изменены"}
+        except:
+            HTTPException(status_code=404, detail="Не удалось изменить данные пользователя")
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
 

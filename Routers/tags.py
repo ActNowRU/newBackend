@@ -17,12 +17,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 @router.post('/tags', response_model=Tag)
 def create_tag(tag: TagBase, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    return tags.create_tag(tag=tag, session=db), {"message": "Tag created"}
+    try:
+        tags.create_tag(tag=tag, session=db)
+        return {"Tag created"}
+    except:
+        HTTPException(status_code=404, detail="Ошибка при создании тэга")
 
 
 @router.get('/all_tags')
 def get_all_tags(db: Session = Depends(get_db)):
-    return db.query(Tags).all()
+    try:
+        return db.query(Tags).all()
+    except:
+        HTTPException(status_code=404, detail="ошибка при поиске тэгов")
 
 
 
@@ -36,12 +43,13 @@ def user_tag(tag_id: int, db: Session = Depends(get_db), token: str = Depends(oa
         tag = db.query(Tags).get(tag_id)
         if not tag:
             raise HTTPException(status_code=404, detail="Tag not found")
-        user = db.query(User).get(user_id)
-
-        user.tags.append(tag)
-        db.commit()
-
-        return{"message": f"Tag {tag.name} assigned to user {user_id}"}
+        try:
+            user = db.query(User).get(user_id)
+            user.tags.append(tag)
+            db.commit()
+            return{"message": f"Tag {tag.name} assigned to user {user_id}"}
+        except:
+            HTTPException(status_code=404, detail="Ошибка добавления тэга")
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
 
@@ -54,10 +62,12 @@ def post_tag(tag_id: int, post_id: int, db: Session = Depends(get_db), token: st
     post = db.query(Post).get(post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    post.tags.append(tag)
-    db.commit()
-
-    return{"message": f"Tag {tag.name} assigned to post {post_id}"}
+    try:
+        post.tags.append(tag)
+        db.commit()
+        return{"message": f"Tag {tag.name} assigned to post {post_id}"}
+    except:
+        HTTPException(status_code=404, detail="Ошибка добавления тэга")
 
 
 @router.post("/story_tag")
@@ -68,8 +78,10 @@ def story_tag(tag_id: int, story_id: int, db: Session = Depends(get_db), token: 
     story = db.query(Story).get(story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    story.tags.append(tag)
-    db.commit()
-
-    return{"message": f"Tag {tag.name} assigned to story {story_id}"}
+    try:
+        story.tags.append(tag)
+        db.commit()
+        return{"message": f"Tag {tag.name} assigned to story {story_id}"}
+    except:
+        HTTPException(status_code=404, detail="Ошибка добавления тэга")
 

@@ -56,5 +56,8 @@ def login(
 
 @router.post('/logout')
 def logout(token: str = Depends(oauth2_scheme)):
-    logout_user(token)
-    return {"detail": "Вы успешно вышли из системы"}
+    try :
+        logout_user(token)
+        return {"detail": "Вы успешно вышли из системы"}
+    except:
+        HTTPException(status_code=404, detail="Ошибка сервера")

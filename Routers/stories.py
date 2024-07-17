@@ -23,15 +23,19 @@ def create_story_endpoint(story: StoryCreateSchema,
                           db: Session = Depends(get_db)):
     if verify_token_in_redis(token):
         try:
-            return create_story(session=db, story=story, token=token)
-        except: HTTPException(status_code=404, detail="История не найдена")
+            create_story(session=db, story=story, token=token)
+            return {"История создана"}
+        except:
+            HTTPException(status_code=403, detail="Данные ведены не верно")
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
 
 
 @router.get("/get_stories", response_model=List[StoryCreateSchema])
 def get_all_stories(db: Session = Depends(get_db)):
-    return db.query(Story).all()
+    try:
+        return db.query(Story).all()
+    except: HTTPException(status_code=404, detail="Историй нет")
 
 
 @router.get("/stories/{story_id}", response_model=StoryCreateSchema)
@@ -51,9 +55,11 @@ def read_user_stories(username: str, db: Session = Depends(get_db)):
 
     if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-    stories = get_all_user_stories(db, owner_id=user.id)
-    return stories
+    try:
+        stories = get_all_user_stories(db, owner_id=user.id)
+        return stories
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="История не найдена")
 
 
 @router.delete("/delete/{story_id}")

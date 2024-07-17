@@ -27,7 +27,11 @@ def create_post_endpoint(post: PostBase,
                          token: str = Depends(oauth2_scheme),
                          db: Session = Depends(get_db)):
     if verify_token_in_redis(token):
-        return create_post(session=db, post=post, token=token)
+        try:
+            create_post(session=db, post=post, token=token)
+            return {"post created"}
+        except:
+            raise HTTPException(status_code=403, detail="Данные введены не верно")
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
 
@@ -43,7 +47,10 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
 
 @router.get("/get_all", response_model=List[PostBase])
 def get_all_posts(db: Session = Depends(get_db)):
-    return db.query(Post).all()
+    try:
+        db.query(Post).all()
+    except:
+        HTTPException(status_code=404, detail="Голсы не найдены")
 
 
 @router.delete("/delete/{post_id}")

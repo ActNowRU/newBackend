@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 from Schemas.user import UserSchema,UserChangeSchema
@@ -23,8 +24,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 def profile(username: str,
             session: Session = Depends(get_db)):
     try:
-        return user_db_services.get_user(session=session, user_name=username)
-    except:
+        user = user_db_services.get_user(session=session, user_name=username)
+        return user
+    except NoResultFound:
         HTTPException(status_code=403, detail="Пользователь не найден")
 
 

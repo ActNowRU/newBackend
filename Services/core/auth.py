@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import bcrypt
 import jwt
 
-from settings import (SECRET_KEY, TOKEN_EXPIRE_TIME)
+from settings import SECRET_KEY, TOKEN_EXPIRE_TIME
 
 
 def hash_password(password) -> bytes:
@@ -16,9 +16,12 @@ def validate_password(self, password) -> bool:
 
 def generate_token(self) -> dict:
     token = jwt.encode(
-        {"user_name": self.user_name, "id": self.id,
-         "exp": datetime.utcnow() + timedelta(seconds=int(TOKEN_EXPIRE_TIME))},
-        SECRET_KEY
+        {
+            "user_name": self.user_name,
+            "id": self.id,
+            "exp": datetime.utcnow() + timedelta(seconds=int(TOKEN_EXPIRE_TIME)),
+        },
+        SECRET_KEY,
     )
 
     return {"token": token}

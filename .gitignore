@@ -1,8 +1,6 @@
-nginx/nginx.conf
+*.sqlite3
+*.db
 .env
-docker-compose.yml
-Dockerfile
-Pipfile
-Pipfile.lock
-settings.py
-.gitignore
+.venv
+venv
+__pycache__/

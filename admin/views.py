@@ -1,22 +1,18 @@
-from sqladmin import ModelView
-
-from Models.user import User
-from database_initializer import  engine
-from Models.tags import Tags, user_tags, post_tags, story_tags
-from sqlalchemy import inspect
-from Models.post import Post
-from Models.story import Story
-from Models.story_likes import Like
-from Models.post_likes import PostLike
-from Models.complaint_post import Complaint_post
-from Models.complaints_user import Complaint_user
-from Models.complaint_story import Complaint_story
-
-
 from sqladmin import Admin
+from sqladmin import ModelView
+from sqlalchemy import inspect
 
+from database_initializer import engine
 from main import app
-
+from services.database.models.complaint_post import Complaint_post
+from services.database.models.complaint_story import Complaint_story
+from services.database.models.complaints_user import Complaint_user
+from services.database.models.post import Post
+from services.database.models.post_likes import PostLike
+from services.database.models.story import Story
+from services.database.models.story_likes import Like
+from services.database.models.tags import Tags, user_tags, post_tags, story_tags
+from services.database.models.user import User
 
 admin = Admin(app, engine)
 
@@ -29,12 +25,16 @@ class UserAdmin(ModelView, model=User):
 
 class PostAdmin(ModelView):
     model = Post
-    column_list = [c_attr.key for c_attr in inspect(Post).mapper.column_attrs] + Post.owner
+    column_list = [
+                      c_attr.key for c_attr in inspect(Post).mapper.column_attrs
+                  ] + Post.owner
 
 
 class StoryAdmin(ModelView):
     model = Story
-    column_list = [c_attr.key for c_attr in inspect(Story).mapper.column_attrs] + Story.owner
+    column_list = [
+                      c_attr.key for c_attr in inspect(Story).mapper.column_attrs
+                  ] + Story.owner
 
 
 class TagsAdmin(ModelView):
@@ -79,7 +79,9 @@ class ComplaintUserAdmin(ModelView):
 
 class ComplaintStoryAdmin(ModelView):
     model = Complaint_story
-    column_list = [c_attr.key for c_attr in inspect(Complaint_story).mapper.column_attrs]
+    column_list = [
+        c_attr.key for c_attr in inspect(Complaint_story).mapper.column_attrs
+    ]
 
 
 admin.add_view(ComplaintUserAdmin)

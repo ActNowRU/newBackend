@@ -1,9 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field
 
 
-class AdminrBaseSchema(BaseModel):
+class AdminBaseSchema(BaseModel):
     email: EmailStr
 
 
-class AdminCreateSchema(AdminrBaseSchema):
+class AdminCreateSchema(AdminBaseSchema):
     hashed_password: str = Field(alias="password")

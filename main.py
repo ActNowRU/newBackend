@@ -1,9 +1,20 @@
+from contextlib import asynccontextmanager
+
 import fastapi
-from Routers.router import router
+
+import router
+from database_initializer import init_models
 
 
-#   from redis_initializer import redis
+@asynccontextmanager
+async def lifespan(app: fastapi.FastAPI):
+    # Load
+    await init_models()
+    yield
+    # Clean up
+    # TODO: Add clean up
 
-app = fastapi.FastAPI()
 
-app.include_router(router)
+app = fastapi.FastAPI(lifespan=lifespan)
+
+app.include_router(router.root_router)

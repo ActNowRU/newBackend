@@ -15,4 +15,4 @@ class PostLike(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User", back_populates="post_likes")
 
-    UniqueConstraint('user_id', 'post_id', name='uq_user_story_like')
+    UniqueConstraint("user_id", "post_id", name="uq_user_story_like")

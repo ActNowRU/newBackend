@@ -1,9 +1,13 @@
 from typing import List
 
-from pydantic import BaseModel, EmailStr, Field  # Импортируем необходимые классы из библиотеки pydantic
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    Field,
+)
 
-from Schemas.post import PostBase
-from Schemas.story import StoryCreateSchema
+from services.database.schemas.post import PostBase
+from services.database.schemas.story import StoryCreateSchema
 
 
 class UserBaseSchema(BaseModel):

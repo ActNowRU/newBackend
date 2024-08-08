@@ -1,8 +1,20 @@
-import redis
+import aioredis
 from fastapi import HTTPException
-from settings import REDIS_PORT, REDIS_HOST
 
-try:
-    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
-except redis.exceptions.ConnectionError as err:
-    raise HTTPException(status_code=500, detail=f"Не удалось подключиться к Redis: {err}")
+from settings import REDIS_HOST
+
+redis = None
+
+
+async def get_redis() -> aioredis.Redis:
+    global redis
+
+    if not redis:
+        try:
+            redis = await aioredis.from_url(REDIS_HOST, decode_responses=True)
+        except aioredis.RedisError as err:
+            raise HTTPException(
+                status_code=500, detail=f"Unable to connect to Redis: {err}"
+            )
+
+    return redis

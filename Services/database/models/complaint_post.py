@@ -12,5 +12,3 @@ class Complaint_post(Base):
 
     post_id = Column(Integer, ForeignKey("post.id"), nullable=True)
     post = relationship("Post", back_populates="complaints")
-
-

@@ -1,8 +1,18 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Time, ARRAY, DateTime
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    Date,
+    Time,
+    # ARRAY,
+    JSON,
+    DateTime,
+)
 from sqlalchemy.orm import relationship
 
-from Models.tags import post_tags
 from database_initializer import Base
+from services.database.models.tags import post_tags
 
 
 class Post(Base):
@@ -17,7 +27,10 @@ class Post(Base):
     location = Column(String, index=True)
     description = Column(String, index=True)
     title = Column(String, index=True)
-    content = Column(ARRAY(String), index=True, nullable=True)
+
+    content = Column(JSON, index=True, nullable=True)
+    # ARRAY is compatible only with Postgresql
+    # content = Column(ARRAY(String), index=True, nullable=True)
 
     tags = relationship("Tags", secondary=post_tags, backref="post")
 
@@ -30,8 +43,4 @@ class Post(Base):
     complaints = relationship("Complaint_post", back_populates="post")
 
     def _str_(self):
-        return f'Post #{self.id}'
-
-
-
-
+        return f"Post #{self.id}"

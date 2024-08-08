@@ -1,5 +1,5 @@
 import jwt
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import (
     LargeBinary,
     Column,
@@ -9,11 +9,10 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
 )
 from sqlalchemy.orm import relationship
-from starlette import status
-import settings
-from Models.tags import user_tags
 
+import settings
 from database_initializer import Base
+from services.database.models.tags import user_tags
 
 
 class User(Base):
@@ -49,14 +48,12 @@ class User(Base):
             return payload
         except jwt.ExpiredSignatureError:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token expired"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
             )
         except jwt.InvalidTokenError:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
             )
 
     def _str_(self):
-        return f'User #{self.email}'
+        return f"User #{self.email}"

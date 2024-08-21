@@ -15,7 +15,6 @@ from services.database.methods.story import (
 )
 from services.database.methods.user import get_user
 from services.database.models.story import Story
-from services.database.models.story_likes import Like
 from services.database.models.user import User
 from services.database.redis import check_token_status
 from services.database.schemas.story import StoryCreateSchema, StoryChangeSchema
@@ -62,7 +61,7 @@ async def read_story(story_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/stories_by_username/{username}", response_model=List[StoryCreateSchema])
 async def read_user_stories(username: str, db: AsyncSession = Depends(get_db)):
-    user = await get_user(db, user_name=username)
+    user = await get_user(db, username=username)
 
     if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -121,57 +120,3 @@ async def update_story(
         return {"message": "История изменена"}
     else:
         raise HTTPException(status_code=401, detail="Токен устарел")
-
-
-@router.post("/like_story/{story_id}")
-async def create_and_delete_like(
-        story_id: int,
-        db: AsyncSession = Depends(get_db),
-        token: str = Depends(oauth2_scheme),
-):
-    if await check_token_status(token):
-        story_result = await db.execute(select(Story).filter(Story.id == story_id))
-        story = story_result.scalars().first()
-        current_user = User.get_current_user_by_token(token)
-        if not story:
-            raise HTTPException(status_code=404, detail="Story not found")
-        like_result = await db.execute(
-            select(Like).filter(
-                Like.owner_id == current_user["id"], Like.story_id == story_id
-            )
-        )
-        like = like_result.scalars().first()
-        if like:
-            await db.delete(like)
-            await db.commit()
-            return {"message": "Like deleted successfully"}
-        elif not like:
-            new_like = Like(owner_id=current_user["id"], story_id=story_id)
-            db.add(new_like)
-            await db.commit()
-            return {"message": "Like added successfully"}
-    else:
-        raise HTTPException(status_code=401, detail="Токен устарел")
-
-
-@router.get("/likes_count/{story_id}")
-async def get_likes_count(story_id: int, db: AsyncSession = Depends(get_db)):
-    story_result = await db.execute(select(Story).filter(Story.id == story_id))
-    story = story_result.scalars().first()
-    if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
-    likes_result = await db.execute(select(Like).filter(Like.story_id == story_id))
-    likes_count = likes_result.scalars().all().count()
-    return {"likes_count": likes_count}
-
-
-@router.get("/story_likes_user/{user_name}")
-async def get_user_story_likes(username: str, db: AsyncSession = Depends(get_db)):
-    user = await get_user(db, user_name=username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    likes_result = await db.execute(select(Like).filter(Like.owner_id == user.id))
-    likes = likes_result.scalars().all()
-    if not user:
-        raise HTTPException(status_code=404, detail="Likes not found")
-    return {"user_story_likes": likes}

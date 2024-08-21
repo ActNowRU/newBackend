@@ -2,7 +2,7 @@ import os
 import secrets
 
 from dotenv import load_dotenv
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 
 def generate_secret_key(length=32) -> str:
@@ -13,10 +13,12 @@ def generate_secret_key(length=32) -> str:
 # Load environment variables from .env file
 load_dotenv()
 
+# =========================================================================================================
+# General settings
+
 # Check if SECRET_KEY is None and generate a new key if needed
 if not os.getenv("SECRET_KEY"):
     new_secret_key = generate_secret_key()
-    os.environ["SECRET_KEY"] = new_secret_key
     try:
         # Read the existing content of the .env file
         with open(".env", "r") as f:
@@ -30,16 +32,29 @@ if not os.getenv("SECRET_KEY"):
         with open(".env", "w") as f:
             f.write(updated_content)
     except FileNotFoundError:
-        raise HTTPException(status_code=500, detail=".env file not found")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=".env file not found",
+        )
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 DEBUG = True
 
-TOKEN_EXPIRE_TIME = 3600
-REDIS_LOGOUT_VALUE = "logged_out"
+# =========================================================================================================
+# JWT settings
 
+ACCESS_TOKEN_EXPIRE_TIME = 60 * 60  # 1 hour
+REFRESH_TOKEN_EXPIRE_TIME = 60 * 60 * 24 * 30  # 30 days
+
+# =========================================================================================================
+# Redis settings
+
+REDIS_LOGOUT_VALUE = "logged_out"
 REDIS_HOST = "redis://localhost:6379"
+
+# =========================================================================================================
+# Database settings
 
 if DEBUG:
     SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///test.sqlite3"

@@ -36,12 +36,12 @@ async def get_all_user_stories(session: AsyncSession, owner_id: int):
     return stories_of_user_result.scalars().all()
 
 
-async def get_all_post_story(session: AsyncSession, post_id: int):
-    stories_of_post_result = await session.execute(
-        select(Story).filter(Story.post_id == post_id)
+async def get_all_goal_story(session: AsyncSession, goal_id: int):
+    stories_of_goal_result = await session.execute(
+        select(Story).filter(Story.goal_id == goal_id)
     )
 
-    return stories_of_post_result.scalars().all()
+    return stories_of_goal_result.scalars().all()
 
 
 async def change_story(session: AsyncSession, story_id, story: StoryChangeSchema):
@@ -49,7 +49,7 @@ async def change_story(session: AsyncSession, story_id, story: StoryChangeSchema
     db_story = db_story_result.scalars().one()
 
     for key, value in story.dict().items():
-        if key not in ["owner_id", "post_id"]:
+        if key not in ["owner_id", "goal_id"]:
             setattr(db_story, key, value)
 
     await session.commit()

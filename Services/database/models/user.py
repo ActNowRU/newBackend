@@ -1,59 +1,77 @@
-import jwt
+import enum
+
 from fastapi import HTTPException, status
 from sqlalchemy import (
     LargeBinary,
     Column,
     String,
     Integer,
+    Boolean,
+    Date,
+    Enum,
+    ForeignKey,
     UniqueConstraint,
     PrimaryKeyConstraint,
 )
 from sqlalchemy.orm import relationship
 
-import settings
 from database_initializer import Base
-from services.database.models.tags import user_tags
+from services.core.auth import decode_token
+
+
+class Gender(enum.Enum):
+    male = "male"
+    female = "female"
+
+
+class Role(enum.Enum):
+    org_admin = "org.admin"
+    # org_staff = "org.staff"
+    consumer = "consumer"
 
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    email = Column(String(255), unique=True, index=True)
-    user_name = Column(String(255), index=True, unique=True)
-    first_name = Column(String(255), index=True, nullable=False)
-    second_name = Column(String(255), index=True, nullable=False)
-    patronymic = Column(String(255), index=True)
-    hashed_password = Column(LargeBinary, nullable=False)
 
-    stories = relationship("Story", back_populates="owner")
-    posts = relationship("Post", back_populates="owner")
+    first_name = Column(String(255), index=True, nullable=True)
+    username = Column(String(255), index=True, unique=True, nullable=False)
 
-    likes = relationship("Like", back_populates="owner")
-    post_likes = relationship("PostLike", back_populates="owner")
+    description = Column(String(2550), index=True, nullable=True)
+    birth_date = Column(Date, index=True, nullable=True)
+    gender = Column(Enum(Gender), nullable=True)
+    photo = Column(LargeBinary, index=True, nullable=True)
 
-    complaints = relationship("Complaint_user", back_populates="user")
+    email = Column(String(255), index=True, unique=True, nullable=False)
+    is_email_confirmed = Column(Boolean, default=False)
 
-    tags = relationship("Tags", secondary=user_tags, backref="users")
+    hashed_password = Column(LargeBinary, index=True, nullable=False)
+
+    role = Column(Enum(Role), nullable=False)
+
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    organization = relationship("Organization", back_populates="users", lazy="selectin")
+
+    stories = relationship("Story", back_populates="owner", lazy="selectin")
 
     UniqueConstraint("email", name="uq_user_email")
     PrimaryKeyConstraint("id", name="pk_user_id")
 
     def __repr__(self):
-        return "<User {user_name!r}>".format(user_name=self.user_name)
+        return "<User {username!r}>".format(username=self.username)
 
-    def get_current_user_by_token(token: str):
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-            )
-        except jwt.InvalidTokenError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
-
-    def _str_(self):
+    def __str__(self):
         return f"User #{self.email}"
+
+    @staticmethod
+    def get_current_user_by_token(token: str) -> dict:
+        payload = decode_token(token)
+
+        if payload["type"] != "access":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token type",
+            )
+
+        return payload

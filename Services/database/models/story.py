@@ -4,6 +4,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     ForeignKey,
+    Boolean,
     JSON,
     # ARRAY,
     DateTime,
@@ -11,10 +12,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from database_initializer import Base
-from services.database.models.tags import story_tags
 
 
-class Story(Base):  #
+class Story(Base):
     __tablename__ = "stories"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -25,18 +25,15 @@ class Story(Base):  #
     # content = Column(ARRAY(String), index=True, nullable=True)
     date_of_creation = Column(DateTime, index=True)
 
-    tags = relationship("Tags", secondary=story_tags, backref="stories")
+    is_recommended = Column(Boolean, default=False)
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    owner = relationship("User", back_populates="stories")
+    owner = relationship("User", back_populates="stories", lazy="selectin")
 
-    post_id = Column(Integer, ForeignKey("post.id"), nullable=False)
-    posts = relationship("Post", back_populates="stories")
-
-    likes = relationship("Like", back_populates="story")
-    complaints = relationship("Complaint_story", back_populates="story")
+    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=False)
+    goals = relationship("Goal", back_populates="stories", lazy="selectin")
 
     PrimaryKeyConstraint("id", name="pk_story_id")
 
-    def _str_(self):
+    def __str__(self):
         return f"Story #{self.id}"

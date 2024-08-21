@@ -11,7 +11,7 @@ async def get_vk_auth_url(client_id, redirect_url):
     return await response.json()
 
 
-async def gev_vk_access_token(client_id, client_secret, redirect_url, code):
+async def get_vk_access_token(client_id, client_secret, redirect_url, code):
     async with AsyncClient() as client:
         response = await client.get(
             f"https://oauth.vk.com/access_token?client_id={client_id}&client_secret={client_secret}"

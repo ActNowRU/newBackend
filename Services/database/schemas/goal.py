@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class PostBase(BaseModel):
+class GoalBase(BaseModel):
     event_date: date
     event_time: time
     location: str
@@ -13,7 +13,7 @@ class PostBase(BaseModel):
     content: Optional[list]
 
 
-class Post(PostBase):
+class Goal(GoalBase):
     id: int
     owner_id: int
 

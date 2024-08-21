@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class StoryCreateSchema(BaseModel):
     descriptions: str
     content: Optional[list]
-    post_id: int
+    goal_id: int
 
 
 class Story(StoryCreateSchema):
@@ -22,4 +22,4 @@ class StoryChangeSchema(BaseModel):
     content: str
 
     class Config:
-        from_atributes = True
+        from_attributes = True

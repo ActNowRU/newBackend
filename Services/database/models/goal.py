@@ -5,26 +5,24 @@ from sqlalchemy import (
     ForeignKey,
     Date,
     Time,
-    # ARRAY,
     JSON,
     DateTime,
 )
 from sqlalchemy.orm import relationship
 
 from database_initializer import Base
-from services.database.models.tags import post_tags
 
 
-class Post(Base):
-    __tablename__ = "post"
+class Goal(Base):
+    __tablename__ = "goals"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     favorites_count = Column(Integer, index=True, nullable=True)
     cost = Column(Integer, index=True, nullable=True)
     event_date = Column(Date, index=True)
     event_time = Column(Time, index=True)
-    date_of_creation = Column(DateTime, index=True)
-    location = Column(String, index=True)
+    creation_date = Column(DateTime, index=True)
+    location = Column(JSON, index=True)
     description = Column(String, index=True)
     title = Column(String, index=True)
 
@@ -32,15 +30,10 @@ class Post(Base):
     # ARRAY is compatible only with Postgresql
     # content = Column(ARRAY(String), index=True, nullable=True)
 
-    tags = relationship("Tags", secondary=post_tags, backref="post")
+    owner_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    owner = relationship("Organization", back_populates="goals", lazy="selectin")
 
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    owner = relationship("User", back_populates="posts")
+    stories = relationship("Story", back_populates="goals", lazy="selectin")
 
-    post_likes = relationship("PostLike", back_populates="post")
-    stories = relationship("Story", back_populates="posts")
-
-    complaints = relationship("Complaint_post", back_populates="post")
-
-    def _str_(self):
-        return f"Post #{self.id}"
+    def __str__(self):
+        return f"Goal #{self.id}"

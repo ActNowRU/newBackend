@@ -10,8 +10,7 @@ from pydantic import (
 )
 
 from services.database.models.user import Gender
-from services.database.schemas.goal import GoalBase
-from services.database.schemas.story import StoryCreateSchema
+from services.database.schemas.story import StorySchema
 from utils.alpha_validation import (
     is_latin,
     is_cyrillic,
@@ -67,9 +66,9 @@ class UserSchemaBase(BaseModel):
         try:
             if isinstance(value, str):
                 is_name = (
-                        is_cyrillic(value)
-                        or is_latin(value)
-                        and value.replace(" ", "").isalpha()
+                    is_cyrillic(value)
+                    or is_latin(value)
+                    and value.replace(" ", "").isalpha()
                 )
                 assert is_name, (
                     f"{info.field_name} must be either "
@@ -152,8 +151,8 @@ class UserSchemaPublic(UserSchemaBase):
     first_name: Optional[str]
     username: str
     description: Optional[str]
-    goals: List[GoalBase] = []
-    stories: List[StoryCreateSchema] = []
+    stories: List[StorySchema] = []
+    photo: Optional[bytes]
 
     class Config:
         from_attributes = True

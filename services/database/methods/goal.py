@@ -1,18 +1,20 @@
 from datetime import datetime
+from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.database.models.goal import Goal
-from services.database.models.user import User
-from services.database.schemas.goal import GoalBase
+from services.database.schemas.goal import GoalCreateSchema
 
 
-async def create_goal(session: AsyncSession, goal: GoalBase, token: str):
-    current_user = User.get_current_user_by_token(token)
-    owner_id = current_user["id"]
-    date_of_creation = datetime.now()
-    db_goal = Goal(**goal.dict(), owner_id=owner_id, date_of_creation=date_of_creation)
+async def create_goal(
+    session: AsyncSession, goal: GoalCreateSchema, content: List[bytes], owner_id: int
+):
+    created_at = datetime.now()
+    db_goal = Goal(
+        **goal.dict(), content=content, owner_id=owner_id, created_at=created_at
+    )
     session.add(db_goal)
 
     await session.commit()
@@ -35,13 +37,17 @@ async def get_all_user_goals(session: AsyncSession, owner_id: int):
     return all_goals_result.scalars().all()
 
 
-async def change_goal(session: AsyncSession, goal_id: int, goal: GoalBase):
+async def change_goal(
+    session: AsyncSession, goal_id: int, goal: GoalCreateSchema, content: List[bytes]
+):
     db_goal_result = await session.execute(select(Goal).filter(Goal.id == goal_id))
     db_goal = db_goal_result.scalars().one()
 
     for key, value in goal.dict().items():
         if key != "owner_id":
             setattr(db_goal, key, value)
+
+    db_goal.content = content
 
     await session.commit()
     await session.refresh(db_goal)

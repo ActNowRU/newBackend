@@ -1,6 +1,7 @@
 from typing import Dict
+from base64 import b64encode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,7 @@ from services.database.models.user import User, Role
 from services.database.redis import save_token_on_user_logout, check_token_status
 from services.database.schemas.user import UserSchema, UserCreateSchema, UserLoginSchema
 
+
 router = APIRouter()
 
 
@@ -29,11 +31,17 @@ router = APIRouter()
     description="Create new user in database",
 )
 async def signup(
-        payload: UserCreateSchema = Depends(),
-        session: AsyncSession = Depends(get_db),
+    payload: UserCreateSchema = Depends(),
+    photo: UploadFile = File(None),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
-        user = await create_user(session, user=payload, role=Role.consumer)
+        content = await photo.read()
+        encoded_photo = b64encode(content)
+
+        user = await create_user(
+            session, user=payload, photo=encoded_photo, role=Role.consumer
+        )
         return UserSchema.model_validate(user)
     except IntegrityError:
         await session.rollback()
@@ -61,8 +69,8 @@ class RefreshedAccessTokenSchema(BaseModel):
     description="Authenticate user and obtain JWT pair of access and refresh tokens",
 )
 async def login(
-        payload: UserLoginSchema = Depends(),
-        session: AsyncSession = Depends(get_db),
+    payload: UserLoginSchema = Depends(),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
         user = await get_user(session=session, login=payload.login)
@@ -87,8 +95,8 @@ async def login(
     description="Refresh and obtain new pair of refresh and access tokens, old ones will be blacklisted",
 )
 async def refresh(
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-        session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    session: AsyncSession = Depends(get_db),
 ):
     payload = decode_token(token=credentials.credentials)
 
@@ -103,7 +111,7 @@ async def refresh(
             detail="Token blacklisted due to logout. Please log in again",
         )
 
-    user = await get_user(session=session, username=payload["username"])
+    user = await get_user(session=session, user_id=payload["id"])
 
     return {"access_token": generate_access_token(user)}
 
@@ -118,12 +126,12 @@ async def refresh(
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
     payload = decode_token(token=credentials.credentials)
 
-    try:
-        if payload["type"] != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
-            )
+    if payload["type"] != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
+        )
 
+    try:
         await save_token_on_user_logout(credentials.credentials)
         return {"detail": "Вы успешно вышли из системы"}
     except:
@@ -141,8 +149,8 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(
     description="Get current user by access token",
 )
 async def get_current_user(
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-        session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    session: AsyncSession = Depends(get_db),
 ):
     user = User.get_current_user_by_token(credentials.credentials)
 

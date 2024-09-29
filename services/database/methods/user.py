@@ -6,13 +6,19 @@ from services.database.models.user import User
 from services.database.schemas.user import UserCreateSchema
 
 
-async def create_user(session: AsyncSession, user: UserCreateSchema, role: str) -> User:
+async def create_user(
+    session: AsyncSession,
+    user: UserCreateSchema,
+    role: str,
+    photo: bytes = None,
+) -> User:
     user = user.dict()
     user["role"] = role
-    user["hashed_password"] = hash_password(user["password"])
+
+    hashed_password = hash_password(user["password"])
     user.pop("password")
 
-    db_user = User(**user)
+    db_user = User(**user, photo=photo, hashed_password=hashed_password)
     session.add(db_user)
 
     await session.commit()
@@ -22,10 +28,10 @@ async def create_user(session: AsyncSession, user: UserCreateSchema, role: str) 
 
 
 async def get_user(
-        session: AsyncSession,
-        user_id: int | None = None,
-        username: str | None = None,
-        login: str | None = None,
+    session: AsyncSession,
+    user_id: int | None = None,
+    username: str | None = None,
+    login: str | None = None,
 ) -> User:
     if user_id:
         db_user_result = await session.execute(select(User).filter(User.id == user_id))

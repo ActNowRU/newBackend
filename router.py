@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from routers import user, goal, story, auth, organization
+from routers import user, goal, story, auth, organization, barcode, search
 
 root_router = APIRouter()
 
@@ -12,4 +12,8 @@ root_router.include_router(
 root_router.include_router(
     goal.router, prefix="/goals", tags=["Organization proposals"]
 )
-root_router.include_router(story.router, prefix="/story", tags=["User reviews"])
+root_router.include_router(story.router, prefix="/stories", tags=["User reviews"])
+root_router.include_router(search.router, prefix="/search", tags=["Search"])
+root_router.include_router(
+    barcode.router, prefix="/barcode", tags=["Barcode generator"]
+)

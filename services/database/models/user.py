@@ -36,7 +36,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
     first_name = Column(String(255), index=True, nullable=True)
-    username = Column(String(255), index=True, unique=True, nullable=False)
+    username = Column(String(255), index=True, unique=True, nullable=True)
 
     description = Column(String(2550), index=True, nullable=True)
     birth_date = Column(Date, index=True, nullable=True)
@@ -54,6 +54,7 @@ class User(Base):
     organization = relationship("Organization", back_populates="users", lazy="selectin")
 
     stories = relationship("Story", back_populates="owner", lazy="selectin")
+    codes = relationship("Code", back_populates="owner", lazy="selectin")
 
     UniqueConstraint("email", name="uq_user_email")
     PrimaryKeyConstraint("id", name="pk_user_id")

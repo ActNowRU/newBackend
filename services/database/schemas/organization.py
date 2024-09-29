@@ -9,31 +9,29 @@ from pydantic import (
 )
 
 from services.database.models.organization import OrganizationType
-from services.database.schemas.goal import Goal
-from services.database.schemas.story import StoryCreateSchema as Story
-from utils.alpha_validation import is_latin, is_strong_password, SPECIAL_CHARS
+from services.database.schemas.goal import GoalSchema
+from services.database.schemas.story import StorySchema
+from services.database.schemas.user import UserSchema
+from utils.alpha_validation import is_strong_password, SPECIAL_CHARS
 from utils.forms import as_form
 
-MIN_USERNAME_LENGTH = 4
-MAX_USERNAME_LENGTH = 20
+
+MIN_NAME_LENGTH = 3
+MAX_NAME_LENGTH = 20
 
 
 class OrganizationSchemaBase(BaseModel):
-    @field_validator("username", check_fields=False)
+    @field_validator("name", check_fields=False)
     @classmethod
     def check_username(cls, value: str, info: ValidationInfo) -> str:
         try:
             if isinstance(value, str):
-                assert not any(
-                    i.isspace() for i in value
-                ), f"{info.field_name} must not contain spaces"
 
                 is_alphanumeric = value.replace(" ", "").isalnum()
                 assert is_alphanumeric, f"{info.field_name} must be alphanumeric"
-                assert is_latin(value), f"{info.field_name} must be latin"
-                assert MIN_USERNAME_LENGTH <= len(value) < MAX_USERNAME_LENGTH, (
-                    f"{info.field_name} must be at least {MIN_USERNAME_LENGTH} "
-                    f"and at most {MAX_USERNAME_LENGTH} characters long"
+                assert MIN_NAME_LENGTH <= len(value) < MAX_NAME_LENGTH, (
+                    f"{info.field_name} must be at least {MIN_NAME_LENGTH} "
+                    f"and at most {MAX_NAME_LENGTH} characters long"
                 )
         except AssertionError as error:
             raise ValueError(error)
@@ -57,14 +55,17 @@ class OrganizationSchemaBase(BaseModel):
 
 class OrganizationSchema(OrganizationSchemaBase):
     id: int
-    username: str
+    name: str
     description: Optional[str]
 
     common_discount: Optional[int]
     max_discount: Optional[int]
 
-    goals: List[Goal] = []
-    stories: List[Story] = []
+    photo: Optional[bytes]
+
+    goals: List[GoalSchema] = []
+    stories: List[StorySchema] = []
+    users: List[UserSchema] = []
 
     class Config:
         from_attributes = True
@@ -72,7 +73,8 @@ class OrganizationSchema(OrganizationSchemaBase):
 
 @as_form
 class OrganizationCreateSchema(OrganizationSchemaBase):
-    username: str = Form(...)
+    name: str = Form(...)
+    description: Optional[str] = Form(None)
 
     inn_or_ogrn: str = Form(...)
     legal_address: str = Form(...)
@@ -86,22 +88,27 @@ class OrganizationCreateSchema(OrganizationSchemaBase):
 
 @as_form
 class OrganizationChangeSchema(OrganizationSchemaBase):
-    username: Optional[str] = Form(None)
+    name: Optional[str] = Form(None)
     description: Optional[str] = Form(None)
-    common_discount: Optional[int] = Form(None)
-    max_discount: Optional[int] = Form(None)
+
+    static_discount: Optional[float] = Form(None)
+    common_discount: Optional[float] = Form(None)
+    max_discount: Optional[float] = Form(None)
+
+    step_amount: Optional[int] = Form(None)
+    days_to_step_back: Optional[int] = Form(None)
 
 
 @as_form
 class SetPlaceLocationSchema(BaseModel):
-    lat: float = Form(...)
-    lon: float = Form(...)
+    name: str
+    address: str
 
 
 class PlaceSchema(BaseModel):
     id: int
+    name: str
     address: str
-    location: dict
 
     class Config:
         from_attributes = True

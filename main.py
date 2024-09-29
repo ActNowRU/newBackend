@@ -1,10 +1,13 @@
 import logging
 
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import ValidationError
 
 import router
 from lifespan import lifespan
+
 
 logging.basicConfig()
 logging.getLogger("sqlalchemy.engine.Engine").disabled = True
@@ -14,6 +17,18 @@ app = FastAPI(
     title="GoalsAPI",
     description="The end-to-end APIs for the Goals discount services for companies and their customers.",
     version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET,POST,PUT,DELETE"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 

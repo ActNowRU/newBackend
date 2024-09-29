@@ -6,7 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     Boolean,
     JSON,
-    # ARRAY,
+    SmallInteger,
     DateTime,
 )
 from sqlalchemy.orm import relationship
@@ -19,19 +19,25 @@ class Story(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
-    descriptions = Column(String(2550), index=True, nullable=True)
+    description = Column(String(2550), index=True, nullable=True)
     content = Column(JSON, index=True, nullable=True)
-    # ARRAY is compatible only with Postgresql
-    # content = Column(ARRAY(String), index=True, nullable=True)
-    date_of_creation = Column(DateTime, index=True)
 
-    is_recommended = Column(Boolean, default=False)
+    created_at = Column(DateTime, index=True)
+
+    is_recommending = Column(Boolean, default=False)
+
+    position = Column(SmallInteger, default=0, nullable=False)
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User", back_populates="stories", lazy="selectin")
 
-    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=False)
-    goals = relationship("Goal", back_populates="stories", lazy="selectin")
+    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=True)
+    goal = relationship("Goal", back_populates="stories", lazy="selectin")
+
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    organization = relationship(
+        "Organization", back_populates="stories", lazy="selectin"
+    )
 
     PrimaryKeyConstraint("id", name="pk_story_id")
 

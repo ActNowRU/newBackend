@@ -9,24 +9,28 @@ from services.database.schemas.user import UserCreateSchema
 
 
 async def create_organization(
-        session: AsyncSession, organization: OrganizationCreateSchema
+    session: AsyncSession, organization: OrganizationCreateSchema, photo: bytes
 ) -> Organization:
     user = organization.dict()
+
+    user.pop("name")
 
     organization = organization.dict()
     organization.pop("password")
 
-    db_org = Organization(**organization)
+    db_org = Organization(**organization, photo=photo)
     session.add(db_org)
+
+    await session.commit()
+    await session.refresh(db_org)
+
+    user["username"] = f"admin{db_org.id}"
 
     db_user = await create_user(
         session=session,
         user=UserCreateSchema.model_validate(user),
         role=Role.org_admin,
     )
-
-    await session.commit()
-    await session.refresh(db_org)
 
     db_user.organization_id = db_org.id
 
@@ -37,17 +41,12 @@ async def create_organization(
 
 
 async def get_organization(
-        session: AsyncSession,
-        organization_id: int | None = None,
-        username: str | None = None,
+    session: AsyncSession,
+    organization_id: int | None = None,
 ) -> Organization:
     if organization_id:
         db_user_result = await session.execute(
             select(Organization).filter(Organization.id == organization_id)
-        )
-    elif username:
-        db_user_result = await session.execute(
-            select(Organization).filter(Organization.username == username)
         )
     else:
         return None
@@ -58,7 +57,7 @@ async def get_organization(
 
 
 async def update_organization(
-        session: AsyncSession, organization: Organization, schema: dict
+    session: AsyncSession, organization: Organization, schema: dict
 ) -> Organization:
     for key, value in schema.items():
         if value is None:
@@ -104,3 +103,39 @@ async def get_all_places(session: AsyncSession):
     )
 
     return places_result.scalars().all()
+
+
+async def get_places_by_query(
+    session: AsyncSession,
+    search_query: str,
+    org_type: str,
+    has_goals: bool,
+    has_discount: bool,
+):
+    to_filter = select(Organization)
+
+    if org_type:
+        to_filter = to_filter.filter(Organization.type == org_type)
+    if search_query:
+        to_filter = to_filter.filter(Organization.name.ilike(f"%{search_query}%"))
+    if has_goals:
+        to_filter = to_filter.filter(Organization.goals.isnot(None))
+    if has_discount:
+        to_filter = to_filter.filter(Organization.common_discount.isnot(None))
+    else:
+        return []
+
+    orgs_result = await session.execute(to_filter)
+
+    orgs = orgs_result.scalars().all()
+
+    if orgs:
+        orgs_ids = [org.id for org in orgs]
+
+        places_result = await session.execute(
+            select(Place).filter(Place.organization_id.in_(orgs_ids))
+        )
+
+        return places_result.scalars().all()
+
+    return []

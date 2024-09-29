@@ -7,7 +7,6 @@ from fastapi import (
     Depends,
     HTTPException,
     File,
-    Path,
     UploadFile,
     status,
 )
@@ -27,6 +26,7 @@ from services.database.methods.organization import (
 )
 from services.database.methods.user import get_user
 from services.database.models.user import User, Role
+from services.database.models.organization import OrganizationType
 from services.database.schemas.organization import (
     OrganizationSchema,
     OrganizationCreateSchema,
@@ -54,13 +54,18 @@ class OrganizationCreatedResponseSchema(BaseModel):
     description="Create new organization in database",
 )
 async def register(
-        payload: OrganizationCreateSchema = Depends(),
-        session: AsyncSession = Depends(get_db),
+    payload: OrganizationCreateSchema = Depends(),
+    photo: UploadFile = File(None),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
+        content = await photo.read()
+        encoded_photo = b64encode(content)
+
         organization, admin = await create_organization(
             session=session,
             organization=payload,
+            photo=encoded_photo,
         )
 
         return OrganizationCreatedResponseSchema(
@@ -73,6 +78,12 @@ async def register(
             status_code=status.HTTP_409_CONFLICT,
             detail="Error while creating user. Perhaps, user already exists",
         )
+    except Exception as e:
+        logging.error("Failed to create organization: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create organization",
+        )
 
 
 @router.get(
@@ -83,8 +94,8 @@ async def register(
     description="Get current organization info by access token",
 )
 async def get_current_organization(
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-        session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    session: AsyncSession = Depends(get_db),
 ):
     user = User.get_current_user_by_token(credentials.credentials)
 
@@ -103,7 +114,7 @@ async def get_current_organization(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You have no access to this resource. "
-                   "You are not an organization admin",
+            "You are not an organization admin",
         )
     except Exception as e:
         logging.error("Failed to get user: %s", e)
@@ -114,21 +125,23 @@ async def get_current_organization(
 
 
 @router.get(
-    "/{username}",
+    "/{organization_id}",
     response_model=OrganizationSchema,
     summary="Get organization info",
     description="Get organization info by username. Shows only public information. Should be authorized",
 )
 async def info(
-        username: str,
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    organization_id: int,
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     # Raises error if unauthorized
     User.get_current_user_by_token(credentials.credentials)
 
     try:
-        organization = await get_organization(session=session, username=username)
+        organization = await get_organization(
+            session=session, organization_id=organization_id
+        )
         return OrganizationSchema.model_validate(organization)
     except NoResultFound:
         raise HTTPException(
@@ -137,27 +150,25 @@ async def info(
 
 
 @router.get(
-    "/photo/{username}",
+    "/photo/{organization_id}",
     response_model=dict,
     summary="Get organization photo",
     description="Get user profile picture by username in base64. Should be authorized",
 )
 async def organization_photo(
-        username: str = Path(...),
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    organization_id: str,
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     # Raises error if unauthorized
     User.get_current_user_by_token(credentials.credentials)
 
     try:
-        organization = await get_organization(session=session, username=username)
-        if organization.photo is None:
-            encoded_photo = None
-        else:
-            encoded_photo = b64encode(organization.photo).decode("utf-8")
-        print(encoded_photo)
-        return {"photo": encoded_photo}
+        organization = await get_organization(
+            session=session, organization_id=organization_id
+        )
+
+        return {"photo": organization.photo}
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Организация не найдена"
@@ -171,16 +182,16 @@ async def organization_photo(
     description="Update organization text info about their profile. Should be authorized",
 )
 async def update_organization_info(
-        payload: OrganizationChangeSchema = Depends(),
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    payload: OrganizationChangeSchema = Depends(),
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     current_user = User.get_current_user_by_token(credentials.credentials)
 
     try:
         assert current_user["role"] == Role.org_admin.value
         user = await get_user(session=session, user_id=current_user["id"])
-    except:
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ваш профиль не найден"
         )
@@ -208,26 +219,28 @@ async def update_organization_info(
     description="Update organization profile photo. Should be authorized",
 )
 async def update_organization_photo(
-        photo: UploadFile = File(...),
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    photo: UploadFile = File(...),
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     current_user = User.get_current_user_by_token(credentials.credentials)
 
     try:
         assert current_user["role"] == Role.org_admin.value
         user = await get_user(session=session, user_id=current_user["id"])
-    except:
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
     try:
         content = await photo.read()
+        encoded_photo = b64encode(content)
+
         organization = await get_organization(
             session=session, organization_id=user.organization_id
         )
         await update_organization(
-            session, organization=organization, schema={"photo": content}
+            session, organization=organization, schema={"photo": encoded_photo}
         )
         return {"detail": "Фото организации успешно обновлено"}
     except Exception as e:
@@ -245,9 +258,9 @@ async def update_organization_photo(
     description="Set location of place in organization. Should be authorized",
 )
 async def set_organization_place(
-        place: SetPlaceLocationSchema = Depends(),
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    place: SetPlaceLocationSchema = Depends(),
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     current_user = User.get_current_user_by_token(credentials.credentials)
 
@@ -258,7 +271,7 @@ async def set_organization_place(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You have no access to this resource. "
-                   "You are not an organization admin",
+            "You are not an organization admin",
         )
     except:
         raise HTTPException(
@@ -287,23 +300,16 @@ async def set_organization_place(
     description="Get all places in all organizations. Should be authorized",
 )
 async def get_all_available_places(
-        session: AsyncSession = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
     current_user = User.get_current_user_by_token(credentials.credentials)
 
     try:
-        assert current_user["role"] == Role.org_admin.value
-        await get_user(session=session, user_id=current_user["id"])
+        assert await get_user(session=session, user_id=current_user["id"])
     except AssertionError:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You have no access to this resource. "
-                   "You are not an organization admin",
-        )
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
         )
 
     places = await get_all_places(session=session)
@@ -312,3 +318,25 @@ async def get_all_available_places(
     )
 
     return formatted_places
+
+
+@router.get(
+    "/types/available",
+    response_model=List[str],
+    summary="Get available organization types",
+    description="Get list of available organization types. Should be authorized",
+)
+async def get_available_organization_types(
+    session: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
+    current_user = User.get_current_user_by_token(credentials.credentials)
+
+    try:
+        assert await get_user(session=session, user_id=current_user["id"])
+    except AssertionError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
+        )
+
+    return [_type.value for _type in OrganizationType]

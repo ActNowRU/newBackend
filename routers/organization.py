@@ -59,8 +59,11 @@ async def register(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        content = await photo.read()
-        encoded_photo = b64encode(content)
+        if photo:
+            content = await photo.read()
+            encoded_photo = b64encode(content)
+        else:
+            encoded_photo = None
 
         organization, admin = await create_organization(
             session=session,
@@ -301,16 +304,16 @@ async def set_organization_place(
 )
 async def get_all_available_places(
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    # credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert await get_user(session=session, user_id=current_user["id"])
-    except AssertionError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
-        )
+    # current_user = User.get_current_user_by_token(credentials.credentials)
+    #
+    # try:
+    #     assert await get_user(session=session, user_id=current_user["id"])
+    # except AssertionError:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
+    #     )
 
     places = await get_all_places(session=session)
     formatted_places = (
@@ -327,16 +330,16 @@ async def get_all_available_places(
     description="Get list of available organization types. Should be authorized",
 )
 async def get_available_organization_types(
-    session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    # session: AsyncSession = Depends(get_db),
+    # credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert await get_user(session=session, user_id=current_user["id"])
-    except AssertionError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
-        )
+    # current_user = User.get_current_user_by_token(credentials.credentials)
+    #
+    # try:
+    #     assert await get_user(session=session, user_id=current_user["id"])
+    # except AssertionError:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND, detail="Вы не авторизованы"
+    #     )
 
     return [_type.value for _type in OrganizationType]

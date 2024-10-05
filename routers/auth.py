@@ -36,8 +36,11 @@ async def signup(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        content = await photo.read()
-        encoded_photo = b64encode(content)
+        if photo:
+            content = await photo.read()
+            encoded_photo = b64encode(content)
+        else:
+            encoded_photo = None
 
         user = await create_user(
             session, user=payload, photo=encoded_photo, role=Role.consumer

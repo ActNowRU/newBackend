@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.routers import user, goal, auth, organization, barcode, search
 from app.routers import story
 
-root_router = APIRouter()
+root_router = APIRouter(prefix="/api")
 
 root_router.include_router(auth.router, prefix="/auth", tags=["Authorization"])
 root_router.include_router(user.router, prefix="/user", tags=["User profiles"])

@@ -62,3 +62,7 @@ else:
     SQLALCHEMY_DATABASE_URL = (
         f"postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
     )
+
+# =========================================================================================================
+# External services settings
+YANDEX_API_KEY = "6cfa2fd2-77ac-4fab-becc-08fe3c03c30b"

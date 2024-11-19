@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import ValidationError
 
-import router
 from lifespan import lifespan
+
+from app import router
+from app.admin.views import admin
 
 
 logging.basicConfig()
@@ -22,10 +24,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+admin.mount_to(app)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
     allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["GET,POST,PUT,DELETE"],
     allow_headers=["*"],
     expose_headers=["*"],

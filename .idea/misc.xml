@@ -6,5 +6,5 @@
     <option name="pathToExecutable" value="/usr/local/bin/black" />
     <option name="sdkName" value="Python 3.12 (newBackend)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (newBackend)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (newBackend) (2)" project-jdk-type="Python SDK" />
 </project>

@@ -3,7 +3,6 @@ from base64 import b64encode
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi_cache.decorator import cache
 
 from pydantic import BaseModel
@@ -12,17 +11,8 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
-from app.database.methods.organization import (
-    create_organization,
-    get_organization,
-    update_organization,
-    set_place,
-    get_all_places,
-    get_place_by_id,
-)
-from app.database.methods.user import get_user
-from app.database.models.user import User, Role
-from app.database.models.organization import OrganizationType
+from app.database.models.user import User
+from app.database.models.organization import Organization, OrganizationType, Place
 from app.database.schemas.organization import (
     OrganizationSchema,
     OrganizationCreateSchema,
@@ -35,8 +25,10 @@ from app.database.schemas.user import (
     UserSchemaPublic,
 )
 
+from app.utils.auth import get_current_user, is_user_organization_admin
 from app.utils.geocoder import YandexGeocoder
 from settings import YANDEX_API_KEY
+
 
 router = APIRouter()
 
@@ -65,9 +57,9 @@ async def register(
         else:
             encoded_photo = None
 
-        organization, admin = await create_organization(
+        organization, admin = await Organization.create(
             session=session,
-            organization=payload,
+            organization_schema=payload,
             photo=encoded_photo,
         )
 
@@ -97,52 +89,39 @@ async def register(
     description="Get current organization info by access token. Should be authorized as organization member",
 )
 async def get_current_organization(
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert user["role"] == Role.org_admin.value
-
-        user = await get_user(session=session, user_id=user["id"])
-        organization = await get_organization(
-            session=session, organization_id=user.organization_id
-        )
-
-        assert user.organization_id
-
-        return OrganizationSchema.model_validate(organization)
-    except AssertionError:
+    if not await is_user_organization_admin(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You have no access to this resource. "
-            "You are not an organization admin",
+            detail="Вы не являетесь администратором организации",
         )
-    except Exception as e:
-        logging.error("Failed to get user: %s", e)
+
+    try:
+        organization = await Organization.get_by_id(
+            session=session, organization_id=user.organization_id
+        )
+    except NoResultFound:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Couldn't get user",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Организация не найдена"
         )
+
+    return OrganizationSchema.model_validate(organization)
 
 
 @router.get(
     "/{organization_id}",
     response_model=OrganizationSchema,
     summary="Get organization info",
-    description="Get organization info by id. Shows only public information. Should be authorized",
+    description="Get organization info by id. Shows only public information",
 )
 async def info(
     organization_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    # Raises error if unauthorized
-    User.get_current_user_by_token(credentials.credentials)
-
     try:
-        organization = await get_organization(
+        organization = await Organization.get_by_id(
             session=session, organization_id=organization_id
         )
         return OrganizationSchema.model_validate(organization)
@@ -156,18 +135,14 @@ async def info(
     "/photo/{organization_id}",
     response_model=dict,
     summary="Get organization photo",
-    description="Get organization picture by id in base64. Should be authorized.",
+    description="Get organization picture by id in base64",
 )
 async def organization_photo(
     organization_id: str,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    # Raises error if unauthorized
-    User.get_current_user_by_token(credentials.credentials)
-
     try:
-        organization = await get_organization(
+        organization = await Organization.get_by_id(
             session=session, organization_id=organization_id
         )
 
@@ -187,24 +162,22 @@ async def organization_photo(
 async def update_organization_info(
     payload: OrganizationChangeSchema = Depends(),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert current_user["role"] == Role.org_admin.value
-        user = await get_user(session=session, user_id=current_user["id"])
-    except NoResultFound:
+    if not await is_user_organization_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Ваш профиль не найден"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не имеете доступа к данному ресурсу, "
+            "так как вы не являетесь администратором организации",
         )
 
     try:
-        organization = await get_organization(
+        organization = await Organization.get_by_id(
             session=session, organization_id=user.organization_id
         )
-        organization = await update_organization(
-            session=session, organization=organization, schema=payload.model_dump()
+
+        organization = await organization.update(
+            session=session, organization=user.organization, schema=payload.model_dump()
         )
         return OrganizationSchema.model_validate(organization)
     except Exception as e:
@@ -224,25 +197,23 @@ async def update_organization_info(
 async def update_organization_photo(
     photo: UploadFile = File(...),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert current_user["role"] == Role.org_admin.value
-        user = await get_user(session=session, user_id=current_user["id"])
-    except NoResultFound:
+    if not await is_user_organization_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не имеете доступа к данному ресурсу, "
+            "так как вы не являетесь администратором организации",
         )
+
     try:
         content = await photo.read()
         encoded_photo = b64encode(content)
 
-        organization = await get_organization(
+        organization = await Organization.get_by_id(
             session=session, organization_id=user.organization_id
         )
-        await update_organization(
+        await organization.update(
             session, organization=organization, schema={"photo": encoded_photo}
         )
         return {"detail": "Фото организации успешно обновлено"}
@@ -263,35 +234,24 @@ async def update_organization_photo(
 async def set_organization_place(
     place: SetPlaceLocationSchema = Depends(),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        assert current_user["role"] == Role.org_admin.value
-    except AssertionError:
+    if not await is_user_organization_admin(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You have no access to this resource. "
-            "You are not an organization admin",
-        )
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+            detail="Вы не имеете доступа к данному ресурсу, "
+            "так как вы не являетесь администратором организации",
         )
 
     try:
-        await set_place(
+        await Place.set(
             session=session,
             organization_id=user.organization_id,
             place=place.model_dump(),
         )
         return {"detail": "Место успешно обновлено"}
     except Exception as e:
-        logging.error("Failed to update user: %s", e)
+        logging.error("Failed to update place: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось изменить данные о месте организации",
@@ -322,7 +282,7 @@ async def get_location(address: str):
 async def get_all_available_places(
     session: AsyncSession = Depends(get_db),
 ):
-    places = await get_all_places(session=session)
+    places = await Place.get_all(session=session)
 
     formatted_places = [
         SummaryPlaceSchema(
@@ -348,7 +308,7 @@ async def get_place(
     place_id: int,
     session: AsyncSession = Depends(get_db),
 ):
-    place = await get_place_by_id(session=session, place_id=place_id)
+    place = await Place.get_by_id(session=session, place_id=place_id)
 
     formatted_place = VerbosePlaceSchema(
         id=place.id,

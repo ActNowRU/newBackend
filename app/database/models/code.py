@@ -1,5 +1,7 @@
-import enum
+from datetime import datetime, timedelta
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
     Column,
@@ -14,12 +16,11 @@ from sqlalchemy import (
 )
 
 from app.database_initializer import Base
+from app.database.schemas.code import CodeCreateSchema
+from app.database.utils import create_model_instance
+from app.database.enums import CodeType
 
-
-class CodeType(enum.Enum):
-    qr_code = "qr"
-    barcode = "barcode"
-    digital = "digital"
+DEFAULT_CODE_EXPIRATION = 60 * 5  # 5 minutes
 
 
 class Code(Base):
@@ -44,3 +45,34 @@ class Code(Base):
 
     def __str__(self):
         return f"Goal #{self.id}"
+
+    @classmethod
+    async def create(
+        cls,
+        session: AsyncSession,
+        code: CodeCreateSchema,
+    ) -> "Code":
+        created_at = datetime.now()
+
+        db_goal = await create_model_instance(
+            session=session,
+            model=cls,
+            **code.model_dump(),
+            expiration=created_at + timedelta(seconds=DEFAULT_CODE_EXPIRATION),
+            created_at=created_at,
+        )
+
+        return db_goal
+
+    async def get_by_value(session: AsyncSession, value: int) -> "Code":
+        db_code_result = await session.execute(select(Code).where(Code.value == value))
+
+        return db_code_result.scalars().one()
+
+    async def blacklist(self, session: AsyncSession) -> "Code":
+        self.is_valid = False
+
+        await session.commit()
+        await session.refresh(self)
+
+        return self

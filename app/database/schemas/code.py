@@ -1,4 +1,4 @@
-from app.database.models.code import CodeType
+from app.database.enums import CodeType
 
 from typing import Optional
 from pydantic import BaseModel

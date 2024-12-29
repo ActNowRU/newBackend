@@ -3,21 +3,11 @@ from typing import List
 from base64 import b64encode
 
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import NoResultFound
 
 from app.database_initializer import get_db
-from app.database.methods.story import (
-    get_story_by_id,
-    create_story,
-    get_all_user_stories,
-    change_story,
-    get_favorite_stories,
-)
-from app.database.methods.user import get_user
 from app.database.models.story import Story
 from app.database.models.user import User
 from app.database.schemas.story import (
@@ -25,6 +15,8 @@ from app.database.schemas.story import (
     StoryChangeSchema,
     StorySchema,
 )
+
+from app.utils.auth import get_current_user
 
 
 router = APIRouter()
@@ -40,18 +32,9 @@ router = APIRouter()
 async def create_new_story(
     story: StoryCreateSchema = Depends(),
     content: List[UploadFile] = File(None),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
     session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
     if (story.organization_id and story.goal_id) or (
         not story.organization_id and not story.goal_id
     ):
@@ -75,11 +58,11 @@ async def create_new_story(
             if content
             else None
         )
-        await create_story(
+        await Story.create(
             session=session,
             story=story,
             content=encoded_content,
-            owner_id=current_user["id"],
+            owner_id=user.id,
         )
         return {"detail": "История успешно создана"}
     except Exception as error:
@@ -99,25 +82,15 @@ async def create_new_story(
 async def get_story(
     story_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
     try:
-        story = await get_story_by_id(session, story_id=story_id)
-        assert story is not None
-        return story
-    except (NoResultFound, AssertionError):
+        story = await Story.get_by_id(session, story_id=story_id)
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
         )
+
+    return story
 
 
 @router.get(
@@ -126,88 +99,66 @@ async def get_story(
     summary="Get all organization stories",
     description="Get all stories in organization. Should be authorized",
 )
-async def get_all_stories(
+async def get_all_organization_stories(
     organization_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
     try:
-        all_stories_result = await session.execute(
-            select(Story).filter(Story.goal.owner_id == organization_id)
+        stories = await Story.get_all_by_organization(
+            session, organization_id=organization_id
         )
-        stories = all_stories_result.scalars().all()
-        return [StorySchema.model_validate(story) for story in stories]
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="У организации нет историй",
         )
 
+    return [StorySchema.model_validate(story) for story in stories]
+
 
 @router.get(
     "/by/user/{username}",
     response_model=List[StorySchema],
     summary="Get user stories",
-    description="Get story by user. Should be authorized",
+    description="Get stories by user. Should be authorized",
 )
 async def get_user_stories(
     username: str,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    User.get_current_user_by_token(credentials.credentials)
-
     try:
-        user = await get_user(session, username=username)
-
-        if user is None:
+        if user := await User.get_by_id_or_login(session, login=username):
+            stories = await Story.get_all_by_owner(session, owner_id=user.id)
+        else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
             )
-
-        stories = await get_all_user_stories(session, owner_id=user.id)
-        return stories
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Истории не найдены"
         )
+
+    return [StorySchema.model_validate(story) for story in stories]
 
 
 @router.get(
     "/by/me",
     response_model=List[StorySchema],
     summary="Get current user stories",
-    description="Get story by current user. Should be authorized",
+    description="Get stories by current user. Should be authorized",
 )
 async def get_current_user_stories(
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
     try:
-        stories = await get_all_user_stories(session, owner_id=current_user["id"])
-        return stories
+        stories = await Story.get_all_by_owner(session, owner_id=user.id)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Истории не найдены"
         )
+
+    return [StorySchema.model_validate(story) for story in stories]
 
 
 @router.delete(
@@ -218,32 +169,22 @@ async def get_current_user_stories(
 async def delete_story(
     story_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    story = await get_story_by_id(session, story_id=story_id)
-
-    if story is None:
+    try:
+        story = await Story.get_by_id(session, story_id=story_id)
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
         )
 
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
-    if story.owner_id != current_user["id"]:
+    if story.owner_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="У вас нет прав на удаление этого поста",
         )
 
-    await session.delete(story)
-    await session.commit()
+    await story.delete(session)
 
     return {"detail": "История успешно удалена"}
 
@@ -258,25 +199,16 @@ async def update_story(
     payload: StoryChangeSchema = Depends(),
     content: List[UploadFile] = File(None),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    story = await get_story_by_id(session, story_id=story_id)
-
-    if story is None:
+    try:
+        story = await Story.get_by_id(session, story_id=story_id)
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
         )
 
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
-    if story.owner_id != current_user["id"]:
+    if story.owner_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="У вас нет прав на изменение этой истории",
@@ -297,9 +229,7 @@ async def update_story(
         else None
     )
 
-    await change_story(
-        story_id=story_id, session=session, story=payload, content=encoded_content
-    )
+    await story.change(session=session, story=payload, content=encoded_content)
 
     return {"detail": "История изменена"}
 
@@ -314,22 +244,13 @@ async def update_story_position(
     story_id: int,
     position: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    story = await get_story_by_id(session, story_id=story_id)
-
-    if story is None:
+    try:
+        story = await Story.get_by_id(session, story_id=story_id)
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
-        )
-
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
 
     if story.organization_id != user.organization_id:
@@ -338,7 +259,7 @@ async def update_story_position(
             detail="У вас нет прав на изменение позиции этой истории в витрине отзывов",
         )
 
-    await change_story(
+    await story.change(
         story_id=story_id, session=session, story={"position": position}, content=None
     )
 
@@ -347,23 +268,14 @@ async def update_story_position(
 
 @router.get(
     "/favorite/{organization_id}",
+    response_model=dict,
     summary="Get favorite stories [TESTING]",
     description="Get favorite stories. Should be authorized. This is on testing, please use /story/organization/{organization_id} instead, to get all organization stories and filter them.",
 )
 async def get_favorite_stories_by_organization(
     organization_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
-    stories = await get_favorite_stories(session, organization_id=organization_id)
+    stories = await Story.get_favorite(session, organization_id=organization_id)
 
     return stories

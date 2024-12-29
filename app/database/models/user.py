@@ -1,6 +1,9 @@
-import enum
+from typing import Any
 
-from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm import relationship
 from sqlalchemy import (
     LargeBinary,
     Column,
@@ -13,22 +16,12 @@ from sqlalchemy import (
     UniqueConstraint,
     PrimaryKeyConstraint,
 )
-from sqlalchemy.orm import relationship
 
+from app.core.auth import hash_password
+from app.database.schemas.user import UserCreateSchema
+from app.database.utils import create_model_instance
 from app.database_initializer import Base
-from app.core.auth import decode_token
-
-
-class Gender(enum.Enum):
-    male = "male"
-    female = "female"
-
-
-class Role(enum.Enum):
-    admin = "admin"
-    org_admin = "org.admin"
-    # org_staff = "org.staff"
-    consumer = "consumer"
+from app.database.enums import Gender, Role
 
 
 class User(Base):
@@ -66,14 +59,54 @@ class User(Base):
     def __str__(self):
         return f"User #{self.email}"
 
-    @staticmethod
-    def get_current_user_by_token(token: str) -> dict:
-        payload = decode_token(token)
+    @classmethod
+    async def create(
+        cls,
+        session: AsyncSession,
+        user_schema: UserCreateSchema,
+        role: str,
+        photo: bytes | None = None,
+    ) -> "User":
+        """Create a new user in the database."""
+        user_data = user_schema.model_dump()
+        user_data["role"] = role
+        user_data["hashed_password"] = hash_password(user_data.pop("password"))
 
-        if payload["type"] != "access":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token type",
-            )
+        user = await create_model_instance(session, model=cls, **user_data, photo=photo)
 
-        return payload
+        return user
+
+    @classmethod
+    async def get_by_id_or_login(
+        cls,
+        session: AsyncSession,
+        user_id: int | None = None,
+        login: str | None = None,
+    ) -> "User":
+        """Get user by id or login (username or email)."""
+        query = select(cls)
+
+        if user_id is not None:
+            query = query.filter(cls.id == user_id)
+        elif login is not None:
+            query = query.filter((cls.username == login) | (cls.email == login))
+
+        try:
+            return (await session.execute(query)).scalars().one()
+        except NoResultFound:
+            return None
+
+    async def update(self, session: AsyncSession, updates: dict[str, Any]) -> "User":
+        """Update a user in the database."""
+        for key, value in updates.items():
+            if value is None:
+                continue
+            if key == "password":
+                key = "hashed_password"
+                value = hash_password(value)
+            setattr(self, key, value)
+
+        await session.commit()
+        await session.refresh(self)
+
+        return self

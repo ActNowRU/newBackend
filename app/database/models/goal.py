@@ -1,3 +1,9 @@
+from datetime import datetime
+from typing import List
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import relationship
 from sqlalchemy import (
     Column,
     Integer,
@@ -8,8 +14,9 @@ from sqlalchemy import (
     Time,
     DateTime,
 )
-from sqlalchemy.orm import relationship
 
+from app.database.utils import create_model_instance
+from app.database.schemas.goal import GoalCreateSchema
 from app.database_initializer import Base
 
 
@@ -45,3 +52,72 @@ class Goal(Base):
 
     def __str__(self):
         return f"Goal #{self.id}"
+
+    @classmethod
+    async def create(
+        cls,
+        session: AsyncSession,
+        goal: GoalCreateSchema,
+        content: List[bytes],
+        owner_id: int,
+    ) -> "Goal":
+        db_goal = await create_model_instance(
+            session=session,
+            model=cls,
+            **goal.model_dump(),
+            content=content,
+            owner_id=owner_id,
+            created_at=datetime.now(),
+        )
+
+        return db_goal
+
+    @classmethod
+    async def get_by_id(cls, session: AsyncSession, goal_id: int) -> "Goal":
+        goal_result = await session.execute(select(cls).filter(cls.id == goal_id))
+
+        return goal_result.scalars().one()
+
+    @classmethod
+    async def get_all(cls, session: AsyncSession) -> list["Goal"]:
+        all_goals_result = await session.execute(select(cls))
+
+        return all_goals_result.scalars().all()
+
+    @classmethod
+    async def get_all_by_owner(
+        cls, session: AsyncSession, owner_id: int
+    ) -> List["Goal"]:
+        all_goals_result = await session.execute(
+            select(cls).filter(cls.owner_id == owner_id)
+        )
+
+        return all_goals_result.scalars().all()
+
+    async def change(
+        self,
+        session: AsyncSession,
+        goal: GoalCreateSchema,
+        content: List[bytes],
+    ) -> "Goal":
+        for key, value in goal.model_dump().items():
+            if key != "owner_id":
+                setattr(self, key, value)
+
+        self.content = content
+
+        await session.commit()
+        await session.refresh(self)
+
+        return self
+
+    async def delete(self, session: AsyncSession) -> None:
+        from app.database.models.story import Story
+
+        stories = await Story.get_all_by_goal(session, goal_id=self.id)
+
+        for story in stories:
+            await session.delete(story)
+
+        await session.delete(self)
+        await session.commit()

@@ -4,5 +4,7 @@
 .venv/
 venv/
 __pycache__/
+.pytest_cache/
+.todo
 **/.idea/workspace.xml
 **/.idea/tasks.xml

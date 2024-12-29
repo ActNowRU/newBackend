@@ -3,6 +3,7 @@ from base64 import b64encode
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,10 +15,11 @@ from app.core.auth import (
     decode_token,
     validate_password,
 )
-from app.database.methods.user import create_user, get_user
 from app.database.models.user import User, Role
 from app.database.redis import save_token_on_user_logout, check_token_status
 from app.database.schemas.user import UserSchema, UserCreateSchema, UserLoginSchema
+
+from app.utils.auth import get_current_user
 
 
 router = APIRouter()
@@ -42,9 +44,13 @@ async def signup(
         else:
             encoded_photo = None
 
-        user = await create_user(
-            session, user=payload, photo=encoded_photo, role=Role.consumer
+        user = await User.create(
+            session=session,
+            user_schema=payload,
+            photo=encoded_photo,
+            role=Role.consumer,
         )
+
         return UserSchema.model_validate(user)
     except IntegrityError:
         await session.rollback()
@@ -75,10 +81,12 @@ async def login(
     payload: UserLoginSchema = Depends(),
     session: AsyncSession = Depends(get_db),
 ):
+    user = await User.get_by_id_or_login(session=session, login=payload.login)
+
     try:
-        user = await get_user(session=session, login=payload.login)
+        assert user
         assert validate_password(user.hashed_password, payload.password)
-    except:
+    except AssertionError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Login or password is incorrect",
@@ -98,7 +106,7 @@ async def login(
     description="Check if user with specified email or username exists",
 )
 async def exists(login: str, session: AsyncSession = Depends(get_db)):
-    user = await get_user(session=session, login=login)
+    user = await User.get_by_id_or_login(session=session, login=login)
 
     try:
         assert user
@@ -131,7 +139,7 @@ async def refresh(
             detail="Token blacklisted due to logout. Please log in again",
         )
 
-    user = await get_user(session=session, user_id=payload["id"])
+    user = await User.get_by_id_or_login(session=session, user_id=payload["id"])
 
     return {"access_token": generate_access_token(user)}
 
@@ -166,25 +174,10 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(
     response_model=UserSchema,
     status_code=status.HTTP_200_OK,
     summary="Get current user",
-    description="Get current user by access token",
+    description="Get current user. Should be authorized",
 )
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-    session: AsyncSession = Depends(get_db),
-):
-    user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await get_user(session=session, user_id=user["id"])
-
-        assert user
-
-        return UserSchema.model_validate(user)
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Couldn't get user",
-        )
+async def get_current_authorized_user(user: User = Depends(get_current_user)):
+    return UserSchema.model_validate(user)
 
 
 # from fastapi import Request

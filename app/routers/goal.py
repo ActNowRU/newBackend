@@ -1,24 +1,19 @@
-import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 
-from app.database.methods.goal import create_goal, get_goal_by_id, change_goal
-from app.database.methods.story import get_all_goal_story
-from app.database.methods.user import get_user
-
 from app.database.models.goal import Goal
-from app.database.models.user import User, Role
-
+from app.database.models.user import User
 from app.database.schemas.goal import GoalCreateSchema, GoalSchema
 
+from app.utils.auth import get_current_user, is_user_organization_admin
+
 from base64 import b64encode
+
 
 router = APIRouter()
 
@@ -34,21 +29,17 @@ router = APIRouter()
 async def create_new_goal(
     goal: GoalCreateSchema = Depends(),
     content: List[UploadFile] = File(None),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if user is None:
+    if not await is_user_organization_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не имеете доступа к данному ресурсу, "
+            "так как вы не являетесь администратором организации",
         )
 
     try:
-        assert current_user["role"] == Role.org_admin.value
-
         assert content, "Необходимо загрузить фотографию"
         assert len(content) == 1, "Нельзя загрузить более одной фотографии"
 
@@ -66,57 +57,49 @@ async def create_new_goal(
         assert (
             goal.from_time and goal.to_time
         ), "Должно быть указано и время от, и время до, либо не указано"
-
-        encoded_content = (
-            [
-                b64encode(await content_item.read()).decode("utf-8")
-                for content_item in content
-            ]
-            if content
-            else None
-        )
-
-        await create_goal(
-            session=session,
-            goal=goal,
-            content=encoded_content,
-            owner_id=user.organization_id,
-        )
-
-        return {"detail": "Голс успешно создан"}
     except AssertionError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         )
-    except Exception as e:
-        logging.error(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось создать голс",
-        )
+
+    encoded_content = (
+        [
+            b64encode(await content_item.read()).decode("utf-8")
+            for content_item in content
+        ]
+        if content
+        else None
+    )
+
+    await Goal.create(
+        session=session,
+        goal=goal,
+        content=encoded_content,
+        owner_id=user.organization_id,
+    )
+
+    return {"detail": "Голс успешно создан"}
 
 
 @router.get(
     "/{goal_id}",
     response_model=GoalSchema,
     summary="Get goal by id",
-    description="Get goal by id. Should be authorized",
+    description="Get goal by id. ",
 )
 async def get_goal(
     goal_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    User.get_current_user_by_token(credentials.credentials)
-
     try:
-        goal = await get_goal_by_id(session, goal_id=goal_id)
-        return GoalSchema.model_validate(goal)
+        goal = await Goal.get_by_id(session, goal_id=goal_id)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Голс не найден"
         )
+
+    return GoalSchema.model_validate(goal)
 
 
 @router.delete(
@@ -127,22 +110,13 @@ async def get_goal(
 async def delete_goal(
     goal_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
     try:
-        goal = await get_goal_by_id(session, goal_id=goal_id)
+        goal = await Goal.get_by_id(session, goal_id=goal_id)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Голс не найден"
-        )
-
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
 
     if goal.owner_id != user.organization_id:
@@ -151,13 +125,7 @@ async def delete_goal(
             detail="У вас нет прав на удаление этого голса",
         )
 
-    stories = await get_all_goal_story(session, goal_id=goal_id)
-
-    for story in stories:
-        await session.delete(story)
-
-    await session.delete(goal)
-    await session.commit()
+    await goal.delete(session=session)
 
     return {"detail": "Пост и истории к нему успешно удалены"}
 
@@ -166,23 +134,19 @@ async def delete_goal(
     "/",
     response_model=List[GoalSchema],
     summary="Get all goals",
-    description="Get all goals. Should be authorized",
+    description="Get all goals.",
 )
 async def get_all_goals(
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    User.get_current_user_by_token(credentials.credentials)
-
     try:
-        result = await session.execute(select(Goal))
-        goals = result.scalars().all()
-
-        return [GoalSchema.model_validate(goal) for goal in goals]
+        goals = await Goal.get_all(session=session)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ни один голс не существует"
         )
+
+    return [GoalSchema.model_validate(goal) for goal in goals]
 
 
 @router.patch(
@@ -195,22 +159,13 @@ async def update_post(
     payload: GoalCreateSchema = Depends(),
     content: List[UploadFile] = File(None),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
     try:
-        goal = await get_goal_by_id(session=session, goal_id=goal_id)
+        goal = await Goal.get_by_id(session=session, goal_id=goal_id)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Голс не найден"
-        )
-
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    user = await get_user(session=session, user_id=current_user["id"])
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
 
     if goal.owner_id != user.organization_id:
@@ -219,16 +174,13 @@ async def update_post(
             detail="У вас нет прав на изменение этого голса",
         )
 
-    if not content:
+    try:
+        assert content, "Необходимо загрузить фотографию"
+        assert len(content) == 1, "Нельзя загрузить более одной фотографии"
+    except AssertionError as error:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Необходимо загрузить фотографию",
-        )
-
-    if len(content) != 1:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Нельзя загрузить более одной фотографии",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
         )
 
     encoded_content = (
@@ -240,8 +192,6 @@ async def update_post(
         else None
     )
 
-    await change_goal(
-        session=session, goal_id=goal_id, goal=payload, content=encoded_content
-    )
+    await goal.change(session=session, goal=payload, content=encoded_content)
 
     return {"detail": "Голс успешно изменен"}

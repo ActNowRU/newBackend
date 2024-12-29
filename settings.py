@@ -23,11 +23,16 @@ if not os.getenv("SECRET_KEY"):
         # Read the existing content of the .env file
         with open(".env", "r") as f:
             file_content = f.read()
-        # Update the SECRET_KEY value in the file content
-        updated_content = file_content.replace(
-            "SECRET_KEY=" + os.getenv("SECRET_KEY"),
-            "SECRET_KEY=" + new_secret_key,
-        )
+
+        if "SECRET_KEY=" in file_content:
+            # Update the SECRET_KEY value in the file content
+            updated_content = file_content.replace(
+                "SECRET_KEY=",
+                "SECRET_KEY=" + new_secret_key,
+            )
+        else:
+            # Append the new key to the file content
+            updated_content = file_content + "\nSECRET_KEY=" + new_secret_key
         # Write the updated content back to the .env file
         with open(".env", "w") as f:
             f.write(updated_content)
@@ -60,9 +65,9 @@ if DEBUG:
     SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///test.sqlite3"
 else:
     SQLALCHEMY_DATABASE_URL = (
-        f"postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
     )
 
 # =========================================================================================================
 # External services settings
-YANDEX_API_KEY = "6cfa2fd2-77ac-4fab-becc-08fe3c03c30b"
+YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")

@@ -8,12 +8,11 @@ from pydantic import (
     field_validator,
 )
 
-from app.database.models.organization import OrganizationType
+from app.database.enums import OrganizationType
 from app.database.schemas.goal import GoalSchema
 from app.database.schemas.story import StorySchema
 from app.utils.alpha_validation import is_strong_password, SPECIAL_CHARS
 from app.utils.forms import as_form
-
 
 MIN_NAME_LENGTH = 3
 MAX_NAME_LENGTH = 20
@@ -108,6 +107,9 @@ class SummaryPlaceSchema(BaseModel):
     name: str
     address: str
     location: Dict[str, float]
+
+    class Config:
+        from_attributes = True
 
 
 class VerbosePlaceSchema(BaseModel):

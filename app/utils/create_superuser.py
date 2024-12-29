@@ -1,18 +1,24 @@
-if __name__ == "__main__":
-    from app.database.models.user import Role
-    from app.database import create_user
-    from app.database_initializer import get_db
+import asyncio
 
+from app.database.models.user import Role, User
+from app.database_initializer import get_db
+
+
+async def create_superuser():
     username = input("Enter username for admin: ")
     password = input("Enter password for admin: ")
 
-    session = get_db()
+    session = await get_db()
 
-    create_user(
-        session=session,
-        user={
+    await User.create(
+        session=session(),
+        user_schema={
             "username": username,
             "password": password,
         },
         role=Role.admin,
     )
+
+
+if __name__ == "__main__":
+    asyncio.run(create_superuser())

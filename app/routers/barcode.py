@@ -1,18 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
 
 from app.database.schemas.code import CodeSchema, CodeCreateSchema
-
-from app.database.models.code import CodeType
+from app.database.models.code import CodeType, Code
+from app.database.models.goal import Goal
 from app.database.models.user import User
+from app.database.models.organization import Organization
 
-from app.database.methods.user import get_user
-from app.database.methods.goal import get_goal_by_id
-from app.database.methods.organization import get_organization
-from app.database.methods.code import create_code, get_code, blacklist_code
+from app.utils.auth import get_current_user, is_user_organization_admin
 
 from app.database_initializer import get_db
 
@@ -38,11 +35,9 @@ router = APIRouter()
 async def create_goal_barcode(
     goal_id: int,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    payload = User.get_current_user_by_token(credentials.credentials)
-
-    value = f"T:1-N:{goal_id}-U:{payload['id']}-{random.randint(100000, 999999)}"
+    value = f"T:1-N:{goal_id}-U:{user.id}-{random.randint(100000, 999999)}"
     barcode = Code128(value, writer=SVGWriter())
 
     # Write to a file-like object:
@@ -53,12 +48,12 @@ async def create_goal_barcode(
 
     code = CodeCreateSchema(
         goal_id=goal_id,
-        owner_id=payload["id"],
+        owner_id=user.id,
         value=value,
         code_type=CodeType.barcode,
         content=svg_content,
     )
-    await create_code(session, code=code)
+    await Code.create(session, code=code)
 
     encoded = b64encode(svg_content).decode("utf-8")
 
@@ -74,14 +69,10 @@ async def create_goal_barcode(
 )
 async def create_organization_barcode(
     organization_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
     session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    payload = User.get_current_user_by_token(credentials.credentials)
-
-    value = (
-        f"T:2-N:{organization_id}-U:{payload['id']}-{random.randint(100000, 999999)}"
-    )
+    value = f"T:2-N:{organization_id}-U:{user.id}-{random.randint(100000, 999999)}"
     barcode = Code128(value, writer=SVGWriter())
 
     # Write to a file-like object:
@@ -92,12 +83,12 @@ async def create_organization_barcode(
 
     code = CodeCreateSchema(
         organization_id=organization_id,
-        owner_id=payload["id"],
+        owner_id=user.id,
         value=value,
         code_type=CodeType.barcode,
         content=svg_content,
     )
-    await create_code(session, code=code)
+    await Code.create(session, code=code)
 
     encoded = b64encode(svg_content).decode("utf-8")
 
@@ -115,31 +106,27 @@ async def create_organization_barcode(
 async def verify_code(
     value: str,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    payload = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await get_user(session, user_id=payload["id"])
-    except NoResultFound:
+    if not is_user_organization_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="You are not authorized"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не можете верифицировать код, "
+            "так как не являетесь администратором организации.",
         )
 
     try:
-        assert user.organization_id, "You are not an organization member"
-
-        code = await get_code(session, value=value)
+        code = await Code.get_by_value(session, value=value)
 
         assert code.expiration > datetime.now(), "Code expired"
         assert code.is_valid, "Code expired"
 
-        organization = await get_organization(
+        organization = await Organization.get_by_id(
             session, organization_id=user.organization_id
         )
 
         if code.organization_id != organization.id:
-            code_goal = await get_goal_by_id(session, goal_id=code.goal_id)
+            code_goal = await Goal.get_by_id(session, goal_id=code.goal_id)
 
             assert (
                 code_goal.owner_id == organization.id
@@ -147,7 +134,7 @@ async def verify_code(
 
         code_schema = CodeSchema.model_validate(code)
 
-        await blacklist_code(session, code_id=value)
+        await code.blacklist(session)
 
     except AssertionError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))

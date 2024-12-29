@@ -10,13 +10,11 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.auth import get_current_user
 from app.database_initializer import get_db
 from app.core.auth import validate_password
-from app.database.methods import user as user_db_services
 from app.database.models.user import User
 from app.database.schemas.user import (
     UserSchema,
@@ -32,20 +30,15 @@ router = APIRouter()
     "/{username}",
     response_model=UserSchemaPublic,
     summary="Get user profile",
-    description="Get user profile by username. Shows only public information. Should be authorized",
+    description="Get user profile by username. Shows only public information.",
 )
 async def profile(
     username: str,
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    # Raises error if unauthorized
-    User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await user_db_services.get_user(session=session, username=username)
+    if user := await User.get_by_id_or_login(session=session, login=username):
         return UserSchemaPublic.model_validate(user)
-    except NoResultFound:
+    else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
@@ -55,21 +48,15 @@ async def profile(
     "/photo/{username}",
     response_model=dict,
     summary="Get user photo",
-    description="Get user profile picture by username in base64. Should be authorized",
+    description="Get user profile picture by username in base64",
 )
-async def profile(
+async def profile_photo(
     username: str = Path(...),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    # Raises error if unauthorized
-    User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await user_db_services.get_user(session=session, username=username)
-
+    if user := await User.get_by_id_or_login(session=session, login=username):
         return {"photo": user.photo}
-    except NoResultFound:
+    else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
         )
@@ -84,24 +71,10 @@ async def profile(
 async def update_user_info(
     payload: UserChangeSchema = Depends(),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
     try:
-        user = await user_db_services.get_user(
-            session=session, user_id=current_user["id"]
-        )
-        assert user
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Ваш профиль не найден"
-        )
-
-    try:
-        user = await user_db_services.update_user(
-            session=session, user=user, schema=payload.model_dump()
-        )
+        user = await user.update(session=session, updates=payload.model_dump())
         return UserSchema.model_validate(user)
     except Exception as e:
         logging.error("Failed to update user: %s", e)
@@ -120,26 +93,13 @@ async def update_user_info(
 async def update_user_photo(
     photo: UploadFile = File(...),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await user_db_services.get_user(
-            session=session, user_id=current_user["id"]
-        )
-        assert user
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
     try:
         content = await photo.read()
         encoded_photo = b64encode(content)
 
-        await user_db_services.update_user(
-            session=session, user=user, schema={"photo": encoded_photo}
-        )
+        await user.update(session=session, updates={"photo": encoded_photo})
         return {"detail": "Фото успешно обновлено"}
     except Exception as e:
         logging.error("Failed to update user: %s", e)
@@ -158,28 +118,16 @@ async def update_user_photo(
 async def update_user_password(
     payload: UserChangePasswordSchema = Depends(),
     session: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user: User = Depends(get_current_user),
 ):
-    current_user = User.get_current_user_by_token(credentials.credentials)
-
-    try:
-        user = await user_db_services.get_user(
-            session=session, user_id=current_user["id"]
-        )
-        assert user
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
     if not validate_password(user.hashed_password, payload.old_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный пароль"
         )
 
     try:
-        user = await user_db_services.update_user(
-            session=session, user=user, schema={"password": payload.new_password}
+        user = await user.update(
+            session=session, updates={"password": payload.new_password}
         )
         return UserSchema.model_validate(user)
     except Exception as e:

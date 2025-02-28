@@ -1,8 +1,10 @@
+import random
+
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
     LargeBinary,
@@ -23,6 +25,7 @@ from app.database.utils import create_model_instance
 from app.database_initializer import Base
 from app.database.enums import Gender, Role
 
+import settings
 
 class User(Base):
     __tablename__ = "users"
@@ -39,6 +42,8 @@ class User(Base):
 
     email = Column(String(255), index=True, unique=True, nullable=True)
     is_email_confirmed = Column(Boolean, default=False)
+
+    last_code = Column(String(5), default="")
 
     hashed_password = Column(LargeBinary, index=True, nullable=False)
 
@@ -70,6 +75,10 @@ class User(Base):
         """Create a new user in the database."""
         user_data = user_schema.model_dump()
         user_data["role"] = role
+
+        if settings.DEBUG:
+            user_data["is_email_confirmed"] = True
+
         user_data["hashed_password"] = hash_password(user_data.pop("password"))
 
         user = await create_model_instance(session, model=cls, **user_data, photo=photo)
@@ -95,6 +104,19 @@ class User(Base):
             return (await session.execute(query)).scalars().one()
         except NoResultFound:
             return None
+
+    async def set_last_code(self, session: AsyncSession) -> str:
+        code = "".join([str(random.randint(0, 9)) for _ in range(6)])
+        setattr(self, "last_code", code)
+
+        await session.commit()
+
+        return code
+
+    async def delete(self, session: AsyncSession) -> None:
+        """Delete a user from the database."""
+        await session.delete(self)
+        await session.commit()
 
     async def update(self, session: AsyncSession, updates: dict[str, Any]) -> "User":
         """Update a user in the database."""

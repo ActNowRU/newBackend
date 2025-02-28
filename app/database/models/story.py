@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     ForeignKey,
+    Enum,
     Boolean,
     JSON,
     SmallInteger,
@@ -19,6 +20,7 @@ from sqlalchemy import (
 from app.database.utils import create_model_instance
 from app.database.schemas.story import StoryCreateSchema, StoryChangeSchema
 from app.database_initializer import Base
+from app.database.enums import ModerationState
 
 
 class Story(Base):
@@ -31,6 +33,7 @@ class Story(Base):
 
     created_at = Column(DateTime, index=True)
 
+    moderation_state = Column(Enum(ModerationState), default=ModerationState.on_check)
     is_recommending = Column(Boolean, default=False)
 
     position = Column(SmallInteger, default=0, nullable=False)
@@ -72,15 +75,31 @@ class Story(Base):
 
     @classmethod
     async def get_by_id(cls, session: AsyncSession, story_id: int) -> "Story":
-        story_result = await session.execute(select(cls).filter(cls.id == story_id))
+        story_result = await session.execute(
+            select(cls).filter(
+                cls.id == story_id & cls.moderation_state == ModerationState.allowed
+            )
+        )
         return story_result.scalars().one()
+
+    @classmethod
+    async def get_all(cls, session: AsyncSession, moderation_state) -> List["Story"]:
+        stories_of_user_result = await session.execute(
+            select(cls).filter(cls.moderation_state == moderation_state)
+        )
+
+        return stories_of_user_result.scalars().all()
 
     @classmethod
     async def get_all_by_owner(
         cls, session: AsyncSession, owner_id: int
     ) -> List["Story"]:
         stories_of_user_result = await session.execute(
-            select(cls).filter(cls.owner_id == owner_id)
+            select(cls).filter(
+                cls.owner_id
+                == owner_id & cls.moderation_state
+                == ModerationState.allowed
+            )
         )
 
         return stories_of_user_result.scalars().all()
@@ -90,7 +109,11 @@ class Story(Base):
         cls, session: AsyncSession, organization_id: int
     ) -> List["Story"]:
         stories_of_organization_result = await session.execute(
-            select(cls).filter(cls.goal.owner_id == organization_id)
+            select(cls).filter(
+                cls.goal.owner_id
+                == organization_id & cls.moderation_state
+                == ModerationState.allowed
+            )
         )
 
         return stories_of_organization_result.scalars().all()
@@ -100,7 +123,9 @@ class Story(Base):
         cls, session: AsyncSession, goal_id: int
     ) -> List["Story"]:
         stories_of_goal_result = await session.execute(
-            select(cls).filter(cls.goal_id == goal_id)
+            select(cls).filter(
+                cls.goal_id == goal_id & cls.moderation_state == ModerationState.allowed
+            )
         )
 
         return stories_of_goal_result.scalars().all()
@@ -137,6 +162,16 @@ class Story(Base):
         await session.delete(self)
         await session.commit()
 
+    async def change_moderation_state(
+        self, session: AsyncSession, moderation_state: ModerationState
+    ) -> "Story":
+        self.moderation_state = moderation_state
+
+        await session.commit()
+        await session.refresh(self)
+
+        return self
+
     async def change(
         self,
         session: AsyncSession,
@@ -145,6 +180,8 @@ class Story(Base):
     ) -> "Story":
         if not isinstance(story, dict):
             story = story.model_dump()
+
+        story["moderation_state"] = ModerationState.on_check
 
         for key, value in story.items():
             if key not in ["owner_id", "goal_id", "organization_id"]:

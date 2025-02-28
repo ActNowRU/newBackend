@@ -38,3 +38,12 @@ async def is_user_organization_admin(user: User):
         return True
     except AssertionError:
         return False
+    
+async def is_user_service_admin(user: User):
+    try:
+        assert user.role == Role.admin
+
+        return True
+    except AssertionError:
+        return False
+

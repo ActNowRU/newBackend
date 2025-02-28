@@ -1,8 +1,12 @@
+import logging
+
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
 import settings
+
+logger = logging.getLogger(__name__)
 
 engine = create_async_engine(
     settings.SQLALCHEMY_DATABASE_URL,
@@ -32,5 +36,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_models(clean=False) -> None:
     async with engine.begin() as conn:
         if clean:
+            logger.info("Cleaning up the database...")
             await conn.run_sync(Base.metadata.drop_all)
+        logger.info("Initializing the database if it haven't been...")
         await conn.run_sync(Base.metadata.create_all)
+     

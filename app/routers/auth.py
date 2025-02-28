@@ -1,15 +1,16 @@
 from typing import Dict
 from base64 import b64encode
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 from app.core.auth import (
+    send_email,
     generate_access_token,
     generate_refresh_token,
     decode_token,
@@ -44,6 +45,12 @@ async def signup(
         else:
             encoded_photo = None
 
+        if user := await User.get_by_id_or_login(session=session, login=payload.email):
+            if user.is_email_confirmed:
+                raise ValueError
+            else:
+                await user.delete(session=session)
+
         user = await User.create(
             session=session,
             user_schema=payload,
@@ -52,13 +59,74 @@ async def signup(
         )
 
         return UserSchema.model_validate(user)
-    except IntegrityError:
+    except ValueError:
         await session.rollback()
         await session.flush()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Error while creating user. Perhaps, user already exists",
         )
+
+@router.get(
+    "/email-verification",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Send email activation code",
+    description="Send activation code to the email.",
+)
+async def email_get_code(email: str, session: AsyncSession = Depends(get_db)):
+    user = await User.get_by_id_or_login(session=session, login=email)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User doesn't exist",
+        )
+
+    code = await user.set_last_code(session=session)
+
+    text = f'''<h1>Ваш код подтверждения на <b>Goals</b></h1>
+    {code}
+Если вы не запрашивали код подтверждения, игнорируйте это сообщение.
+'''
+    try:
+        send_email("Подтверждение регистрации на Goals", text, email)
+    except Exception as e:
+        logging.error(f"Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong",
+        )
+
+    return {"detail": "Email activation code sent"}
+
+@router.post(
+    "/email-verification",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Check email activation code.",
+    description="Check email activation code.",
+)
+async def email_post_code(email: str, code: str, session: AsyncSession = Depends(get_db)):
+    user = await User.get_by_id_or_login(session=session, login=email)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User doesn't exist",
+        )
+
+    if user.last_code == code and code != "":
+        user.is_email_confirmed = True
+        await session.commit()
+
+        return {"detail": "Email is activated"}
+
+    raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect activation code",
+        )
+
 
 
 class TokenPairSchema(BaseModel):
@@ -85,6 +153,9 @@ async def login(
 
     try:
         assert user
+        logging.info("The user exists")
+        assert user.is_email_confirmed
+        logging.info("Email is confirmed")
         assert validate_password(user.hashed_password, payload.password)
     except AssertionError:
         raise HTTPException(

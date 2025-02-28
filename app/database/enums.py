@@ -1,5 +1,10 @@
 import enum
 
+class ModerationState(enum.Enum):
+    on_check = "on_check"
+    allowed = "allowed"
+    denied = "denied"
+
 
 class Gender(enum.Enum):
     male = "male"
@@ -9,7 +14,7 @@ class Gender(enum.Enum):
 class Role(enum.Enum):
     admin = "admin"  # Admin of the platform
     org_admin = "org.admin"  # Admin of an organization
-    # org_staff = "org.staff" # Staff of an organization
+    # org_staff = "org.staff" # Staff member of an organization
     consumer = "consumer"  # Customer
 
 

@@ -18,7 +18,7 @@ class GoalCreateSchema(BaseModel):
 
     address: str = Form(...)
 
-    dates: Optional[list[date]] = Form(None)
+    dates: Optional[list[date] | list[str] | None] = Form(None)
     from_date: Optional[date] = Form(None)
     to_date: Optional[date] = Form(None)
 

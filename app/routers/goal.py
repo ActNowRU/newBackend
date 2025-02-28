@@ -43,20 +43,21 @@ async def create_new_goal(
         assert content, "Необходимо загрузить фотографию"
         assert len(content) == 1, "Нельзя загрузить более одной фотографии"
 
-        assert ((goal.from_date and goal.to_date) or goal.dates) or not any(
-            [goal.from_date, goal.to_date, goal.dates]
-        ), (
-            "Должна быть указана и дата от, и дата до, "
-            "либо выборка дат, либо оставить поля пустыми"
-        )
+        if goal.from_date or goal.to_date or goal.dates:
+            if goal.dates:
+                assert not (
+                    goal.from_date or goal.to_date
+                ), "Необходимо указывать только дату от и до или только выборку дат"
+            else:
+                assert goal.from_date and goal.to_date, (
+                    "Должна быть указана и дата от, и дата до, "
+                    "либо выборка дат, либо оставить поля пустыми"
+                )
 
-        assert ((goal.from_date or goal.to_date) and not goal.dates) or not any(
-            [goal.from_date, goal.to_date, goal.dates]
-        ), "Необходимо указывать только дату от и до или только выборку дат"
-
-        assert (
-            goal.from_time and goal.to_time
-        ), "Должно быть указано и время от, и время до, либо не указано"
+        if goal.from_time or goal.to_time:
+            assert (
+                goal.from_time and goal.to_time
+            ), "Должно быть указано и время от, и время до, либо не указано"
     except AssertionError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -86,7 +87,7 @@ async def create_new_goal(
     "/{goal_id}",
     response_model=GoalSchema,
     summary="Get goal by id",
-    description="Get goal by id. ",
+    description="Get goal by id.",
 )
 async def get_goal(
     goal_id: int,

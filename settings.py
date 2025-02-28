@@ -44,7 +44,15 @@ if not os.getenv("SECRET_KEY"):
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-DEBUG = True
+DEBUG = True if os.getenv("DEBUG") in ("true", "True") else False
+
+# =========================================================================================================
+# SMTP settings
+
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SMTP_SENDER = os.getenv("SMTP_SENDER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 # =========================================================================================================
 # JWT settings
@@ -70,4 +78,5 @@ else:
 
 # =========================================================================================================
 # External services settings
+
 YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")

@@ -1,5 +1,6 @@
 import logging
 from base64 import b64encode
+from datetime import datetime, timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, status
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database_initializer import get_db
 from app.database.models.user import User
 from app.database.models.organization import Organization, OrganizationType, Place
+from app.database.models.discount import Discount
 from app.database.schemas.organization import (
     OrganizationSchema,
     OrganizationCreateSchema,
@@ -338,3 +340,53 @@ async def test_caching_geopoint():
 )
 async def get_available_organization_types():
     return [_type.value for _type in OrganizationType]
+
+
+@router.get(
+    "/discount/{organization_id}",
+    response_model=dict,
+    summary="Get individual discount of authorized user in specific organization",
+    description="Get individual discount of authorized user in specific organization. If timestamp indicates that more time has passed than days_to_step_back, then step back the discount by one step.",
+)
+async def get_individual_discount(
+    organization_id: int,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        discount = await Discount.get_by_user_and_organization(
+            session=session,
+            user_id=user.id,
+            organization_id=organization_id
+        )
+        if not discount:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
+            )
+
+        organization = await Organization.get_by_id(
+            session=session, organization_id=organization_id
+        )
+
+        if not organization:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Организация не найдена"
+            )
+
+        time_since_update = datetime.now() - discount.updated_at
+        if time_since_update > timedelta(days=organization.days_to_step_back):
+            step = (organization.max_discount - organization.common_discount) / organization.step_amount
+            new_discount_percentage = max(discount.discount_percentage - step, organization.common_discount)
+            await discount.update_percentage(session=session, discount_percentage=new_discount_percentage)
+
+        return {"discount_percentage": discount.discount_percentage}
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
+        )
+    except Exception as e:
+        logging.error("Failed to get discount: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось получить скидку",
+        )

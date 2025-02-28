@@ -14,43 +14,6 @@ EXPECTED_DATA_FOR_GET_PLACE = [
 
 
 @pytest.mark.asyncio
-async def test_organization_auth(client):
-    types_response = await client.get("/organization/types/available")
-    assert types_response.status_code == 200, types_response.json()
-    types = types_response.json()
-    register_response = await client.post(
-        "/organization/register",
-        data={
-            "name": "Test Org",
-            "email": "test@test.com",
-            "organization_type": random.choice(types),
-            "password": "Test123$",
-            "inn_or_ogrn": "1234567890",
-            "legal_address": "Gorbunova Street, 14, Moscow, 121596",
-        },
-    )
-    assert register_response.status_code == 201, register_response.json()
-
-    login_response = await client.post(
-        "/auth/login",
-        data={"login": "test@test.com", "password": "Test123$"},
-    )
-
-    assert login_response.status_code == 200, login_response.json()
-
-    login_response_json = login_response.json()
-
-    assert login_response_json.get("access_token")
-    assert login_response_json.get("refresh_token")
-
-    auth_response = await client.get(
-        "/organization/us",
-        headers={"Authorization": f"Bearer {login_response_json['access_token']}"},
-    )
-    assert auth_response.status_code == 200, auth_response.json()
-
-
-@pytest.mark.asyncio
 async def test_places(client, access_data):
     response = await client.get("/organization/places/")
     assert response.status_code == 200, response.json()

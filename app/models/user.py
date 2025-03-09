@@ -19,11 +19,11 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
 )
 
-from app.auth.password import hash_password
+from app.services.auth.password import hash_password
 from app.schemas.user import UserCreateSchema
 from app.utils.db import create_model_instance
 from app.database_initializer import Base
-from app.enums import Gender, Role
+from app.types.enums import Gender, Role
 
 import settings
 

@@ -9,7 +9,7 @@ from pydantic import (
     field_validator,
 )
 
-from app.enums import Gender
+from app.types.enums import Gender
 from app.schemas.story import StorySchema
 from app.utils.alpha_validation import (
     is_latin,

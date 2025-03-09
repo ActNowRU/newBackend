@@ -9,7 +9,7 @@ from sqlalchemy.exc import NoResultFound, IntegrityError
 
 from app.database_initializer import get_db
 from app.models.story import Story
-from app.enums import ModerationState
+from app.types.enums import ModerationState
 from app.models.user import User
 from app.models.discount import Discount
 from app.schemas.story import (

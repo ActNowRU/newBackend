@@ -28,7 +28,7 @@ from app.schemas.user import (
 )
 
 from app.utils.auth import get_current_user, is_user_organization_admin
-from app.utils.geocoder import YandexGeocoder
+from app.services.geocoder import YandexGeocoder
 from settings import YANDEX_API_KEY
 
 

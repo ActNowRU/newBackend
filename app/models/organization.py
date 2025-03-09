@@ -20,7 +20,7 @@ from app.schemas.organization import OrganizationCreateSchema
 from app.schemas.user import UserCreateSchema
 from app.utils.db import create_model_instance
 from app.database_initializer import Base
-from app.enums import OrganizationType
+from app.types.enums import OrganizationType
 
 
 class Organization(Base):

@@ -10,9 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 
-from app.auth.email import send_email
-from app.auth.jwt import generate_access_token, generate_refresh_token, decode_token
-from app.auth.password import validate_password
+from app.services.auth.email import send_email
+from app.services.auth.jwt import (
+    generate_access_token,
+    generate_refresh_token,
+    decode_token,
+)
+from app.services.auth.password import validate_password
 
 from app.models.user import User, Role
 from app.utils.redis import save_token_on_user_logout, check_token_status

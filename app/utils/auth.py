@@ -4,7 +4,7 @@ from fastapi import HTTPException, Depends, status
 
 from app.database_initializer import get_db
 from app.models.user import User, Role
-from app.auth.jwt import decode_token
+from app.services.auth.jwt import decode_token
 
 
 async def get_current_user(

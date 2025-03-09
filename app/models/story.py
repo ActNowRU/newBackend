@@ -20,7 +20,7 @@ from sqlalchemy import (
 from app.utils.db import create_model_instance
 from app.schemas.story import StoryCreateSchema, StoryChangeSchema
 from app.database_initializer import Base
-from app.enums import ModerationState
+from app.types.enums import ModerationState
 
 
 class Story(Base):

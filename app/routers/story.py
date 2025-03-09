@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound, IntegrityError
 
 from app.database_initializer import get_db
-from app.database.models.story import Story
-from app.database.enums import ModerationState
-from app.database.models.user import User
-from app.database.models.discount import Discount
-from app.database.schemas.story import (
+from app.models.story import Story
+from app.enums import ModerationState
+from app.models.user import User
+from app.models.discount import Discount
+from app.schemas.story import (
     StoryCreateSchema,
     StoryChangeSchema,
     StorySchema,
@@ -22,6 +22,7 @@ from app.utils.auth import get_current_user, is_user_service_admin
 
 
 router = APIRouter()
+
 
 @router.post(
     "/",
@@ -295,7 +296,8 @@ async def get_all_stories_admin(
 ):
     if not await is_user_service_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Вы не являетесь администратором сервиса."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не являетесь администратором сервиса.",
         )
     try:
         stories = await Story.get_all(session, moderation_state=moderation_state)
@@ -321,7 +323,8 @@ async def change_story_moderation_state_admin(
 ):
     if not await is_user_service_admin(user):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Вы не являетесь администратором сервиса."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не являетесь администратором сервиса.",
         )
     try:
         story = await Story.get_by_id(session=session, story_id=story_id)
@@ -330,21 +333,27 @@ async def change_story_moderation_state_admin(
             discount = await Discount.get_by_user_and_organization(
                 session=session,
                 user_id=story.owner_id,
-                organization_id=story.organization_id
+                organization_id=story.organization_id,
             )
             organization = story.organization
-            step = (organization.max_discount - organization.common_discount) / organization.step_amount
+            step = (
+                organization.max_discount - organization.common_discount
+            ) / organization.step_amount
             new_discount_percentage = step
 
             if discount:
-                new_discount_percentage = min(discount.discount_percentage + step, organization.max_discount)
-                await discount.update_percentage(session=session, discount_percentage=new_discount_percentage)
+                new_discount_percentage = min(
+                    discount.discount_percentage + step, organization.max_discount
+                )
+                await discount.update_percentage(
+                    session=session, discount_percentage=new_discount_percentage
+                )
             else:
                 await Discount.create(
                     session=session,
                     user_id=story.owner_id,
                     organization_id=story.organization_id,
-                    discount_percentage=new_discount_percentage
+                    discount_percentage=new_discount_percentage,
                 )
 
         await story.change_moderation_state(
@@ -362,3 +371,30 @@ async def change_story_moderation_state_admin(
             detail="Something Went Wrong",
         )
     return {"detail": "Состояние истории изменено"}
+
+
+@router.get(
+    "/discount/{organization_id}",
+    response_model=dict,
+    summary="Get user discount in organization",
+    description="Get the individual discount of the authorized user in a specific organization. Should be authorized",
+)
+async def get_user_discount(
+    organization_id: int,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        discount = await Discount.get_by_user_and_organization(
+            session=session, user_id=user.id, organization_id=organization_id
+        )
+        if not discount:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
+            )
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
+        )
+
+    return {"discount_percentage": discount.discount_percentage}

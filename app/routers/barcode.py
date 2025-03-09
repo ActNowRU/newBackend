@@ -3,13 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
 
-from app.database.schemas.code import CodeSchema, CodeCreateSchema
-from app.database.models.code import CodeType, Code
-from app.database.models.goal import Goal
-from app.database.models.user import User
-from app.database.models.organization import Organization
+from app.schemas.code import CodeSchema, CodeCreateSchema
+from app.models.code import CodeType, Code
+from app.models.goal import Goal
+from app.models.user import User
+from app.models.organization import Organization
 
-from app.utils.auth import get_current_user, is_user_organization_admin
+from app.utils.auth import get_current_user, verify_organization_admin
 
 from app.database_initializer import get_db
 
@@ -108,12 +108,7 @@ async def verify_code(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не можете верифицировать код, "
-            "так как не являетесь администратором организации.",
-        )
+    await verify_organization_admin()
 
     try:
         code = await Code.get_by_value(session, value=value)
@@ -128,9 +123,9 @@ async def verify_code(
         if code.organization_id != organization.id:
             code_goal = await Goal.get_by_id(session, goal_id=code.goal_id)
 
-            assert (
-                code_goal.owner_id == organization.id
-            ), "Code belongs to other organization or goal"
+            assert code_goal.owner_id == organization.id, (
+                "Code belongs to other organization or goal"
+            )
 
         code_schema = CodeSchema.model_validate(code)
 

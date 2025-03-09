@@ -15,12 +15,12 @@ from sqlalchemy import (
     ForeignKey,
 )
 
-from app.database.models.user import Role, User
-from app.database.schemas.organization import OrganizationCreateSchema
-from app.database.schemas.user import UserCreateSchema
-from app.database.utils import create_model_instance
+from app.models.user import Role, User
+from app.schemas.organization import OrganizationCreateSchema
+from app.schemas.user import UserCreateSchema
+from app.utils.db import create_model_instance
 from app.database_initializer import Base
-from app.database.enums import OrganizationType
+from app.enums import OrganizationType
 
 
 class Organization(Base):
@@ -53,6 +53,7 @@ class Organization(Base):
     stories = relationship("Story", back_populates="organization", lazy="selectin")
     users = relationship("User", back_populates="organization", lazy="selectin")
     codes = relationship("Code", back_populates="organization", lazy="selectin")
+    discounts = relationship("Discount", back_populates="organization", lazy="selectin")
 
     @classmethod
     async def create(

@@ -9,16 +9,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
-from app.core.auth import (
-    send_email,
-    generate_access_token,
-    generate_refresh_token,
-    decode_token,
-    validate_password,
-)
-from app.database.models.user import User, Role
-from app.database.redis import save_token_on_user_logout, check_token_status
-from app.database.schemas.user import UserSchema, UserCreateSchema, UserLoginSchema
+
+from app.auth.email import send_email
+from app.auth.jwt import generate_access_token, generate_refresh_token, decode_token
+from app.auth.password import validate_password
+
+from app.models.user import User, Role
+from app.utils.redis import save_token_on_user_logout, check_token_status
+from app.schemas.user import UserSchema, UserCreateSchema, UserLoginSchema
 
 from app.utils.auth import get_current_user
 
@@ -67,6 +65,7 @@ async def signup(
             detail="Error while creating user. Perhaps, user already exists",
         )
 
+
 @router.get(
     "/email-verification",
     response_model=dict,
@@ -76,7 +75,7 @@ async def signup(
 )
 async def email_get_code(email: str, session: AsyncSession = Depends(get_db)):
     user = await User.get_by_id_or_login(session=session, login=email)
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,10 +84,10 @@ async def email_get_code(email: str, session: AsyncSession = Depends(get_db)):
 
     code = await user.set_last_code(session=session)
 
-    text = f'''<h1>Ваш код подтверждения на <b>Goals</b></h1>
+    text = f"""<h1>Ваш код подтверждения на <b>Goals</b></h1>
     {code}
 Если вы не запрашивали код подтверждения, игнорируйте это сообщение.
-'''
+"""
     try:
         send_email("Подтверждение регистрации на Goals", text, email)
     except Exception as e:
@@ -100,6 +99,7 @@ async def email_get_code(email: str, session: AsyncSession = Depends(get_db)):
 
     return {"detail": "Email activation code sent"}
 
+
 @router.post(
     "/email-verification",
     response_model=dict,
@@ -107,7 +107,9 @@ async def email_get_code(email: str, session: AsyncSession = Depends(get_db)):
     summary="Check email activation code.",
     description="Check email activation code.",
 )
-async def email_post_code(email: str, code: str, session: AsyncSession = Depends(get_db)):
+async def email_post_code(
+    email: str, code: str, session: AsyncSession = Depends(get_db)
+):
     user = await User.get_by_id_or_login(session=session, login=email)
 
     if not user:
@@ -123,10 +125,9 @@ async def email_post_code(email: str, code: str, session: AsyncSession = Depends
         return {"detail": "Email is activated"}
 
     raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect activation code",
-        )
-
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Incorrect activation code",
+    )
 
 
 class TokenPairSchema(BaseModel):
@@ -233,7 +234,8 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(
     try:
         await save_token_on_user_logout(credentials.credentials)
         return {"detail": "Вы успешно вышли из системы"}
-    except:
+    except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Couldn't blacklist token",

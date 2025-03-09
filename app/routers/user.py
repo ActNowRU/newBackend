@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.auth import get_current_user
 from app.database_initializer import get_db
-from app.core.auth import validate_password
-from app.database.models.user import User
-from app.database.schemas.user import (
+from app.auth.password import validate_password
+from app.models.user import User
+from app.schemas.user import (
     UserSchema,
     UserSchemaPublic,
     UserChangeSchema,

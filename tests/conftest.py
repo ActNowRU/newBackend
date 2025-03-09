@@ -36,6 +36,7 @@ logging.getLogger("httpx").disabled = True
 
 logger = logging.getLogger(__name__)
 
+
 @pytest_asyncio.fixture(scope="session")
 async def app():
     @asynccontextmanager
@@ -48,15 +49,7 @@ async def app():
         # Clean up on shutdown
         # TODO: Add clean up
 
-    app = FastAPI(
-        lifespan=lifespan,
-        title="Test",
-        description="Test",
-        version="1.0.0",
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
-        openapi_url="/api/openapi.json",
-    )
+    app = FastAPI(lifespan=lifespan)
 
     app.include_router(root_router)
 
@@ -79,7 +72,9 @@ async def access_data(client: AsyncClient):
     response_log = await client.post(
         "/auth/login", data={"login": "test@test.com", "password": "Test123$"}
     )
-    logger.info(f"Initial login attempt: {response_log.status_code}, {response_log.json()}")
+    logger.info(
+        f"Initial login attempt: {response_log.status_code}, {response_log.json()}"
+    )
 
     if response_log.status_code != 200:
         response_reg = await client.post(
@@ -93,7 +88,9 @@ async def access_data(client: AsyncClient):
                 "legal_address": "Gorbunova Street, 14, Moscow, 121596",
             },
         )
-        logger.info(f"Registration attempt: {response_reg.status_code}, {response_reg.json()}")
+        logger.info(
+            f"Registration attempt: {response_reg.status_code}, {response_reg.json()}"
+        )
         if response_reg.status_code != 201:
             raise Exception(
                 f"Failed to register user. Status code: {response_reg.status_code}, response: {response_reg.json()}"
@@ -102,7 +99,9 @@ async def access_data(client: AsyncClient):
         response_log = await client.post(
             "/auth/login", data={"login": "test@test.com", "password": "Test123$"}
         )
-        logger.info(f"Second login attempt: {response_log.status_code}, {response_log.json()}")
+        logger.info(
+            f"Second login attempt: {response_log.status_code}, {response_log.json()}"
+        )
 
         if not response_log.json().get("access_token"):
             raise Exception(

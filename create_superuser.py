@@ -1,6 +1,6 @@
 import asyncio
 
-from app.database.models.user import Role, User
+from app.models.user import Role, User
 from app.database_initializer import get_db
 
 

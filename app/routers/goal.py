@@ -6,11 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 
-from app.database.models.goal import Goal
-from app.database.models.user import User
-from app.database.schemas.goal import GoalCreateSchema, GoalSchema
+from app.models.goal import Goal
+from app.models.user import User
+from app.schemas.goal import GoalCreateSchema, GoalSchema
 
-from app.utils.auth import get_current_user, is_user_organization_admin
+from app.utils.auth import get_current_user, verify_organization_admin
 
 from base64 import b64encode
 
@@ -28,36 +28,30 @@ router = APIRouter()
 )
 async def create_new_goal(
     goal: GoalCreateSchema = Depends(),
-    content: List[UploadFile] = File(None),
+    content: UploadFile = File(None),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    if not await is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не имеете доступа к данному ресурсу, "
-            "так как вы не являетесь администратором организации",
-        )
+    await verify_organization_admin()
 
     try:
         assert content, "Необходимо загрузить фотографию"
-        assert len(content) == 1, "Нельзя загрузить более одной фотографии"
 
-        if goal.from_date or goal.to_date or goal.dates:
-            if goal.dates:
-                assert not (
-                    goal.from_date or goal.to_date
-                ), "Необходимо указывать только дату от и до или только выборку дат"
-            else:
-                assert goal.from_date and goal.to_date, (
-                    "Должна быть указана и дата от, и дата до, "
-                    "либо выборка дат, либо оставить поля пустыми"
-                )
+        if goal.dates:
+            assert not (goal.from_date or goal.to_date), (
+                "Необходимо указывать только дату от и до или только выборку дат"
+            )
+        else:
+            assert not (goal.from_date or goal.to_date) or (
+                goal.from_date and goal.to_date
+            ), (
+                "Должна быть указана и дата от, и дата до, "
+                "либо выборка дат, либо оставить поля пустыми"
+            )
 
-        if goal.from_time or goal.to_time:
-            assert (
-                goal.from_time and goal.to_time
-            ), "Должно быть указано и время от, и время до, либо не указано"
+        assert not (goal.from_time or goal.to_time) or (
+            goal.from_time and goal.to_time
+        ), "Должно быть указано и время от, и время до, либо не указано"
     except AssertionError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,12 +59,7 @@ async def create_new_goal(
         )
 
     encoded_content = (
-        [
-            b64encode(await content_item.read()).decode("utf-8")
-            for content_item in content
-        ]
-        if content
-        else None
+        b64encode(await content.read()).decode("utf-8") if content else None
     )
 
     await Goal.create(
@@ -113,6 +102,8 @@ async def delete_goal(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await verify_organization_admin()
+
     try:
         goal = await Goal.get_by_id(session, goal_id=goal_id)
     except NoResultFound:
@@ -162,6 +153,8 @@ async def update_post(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await verify_organization_admin()
+
     try:
         goal = await Goal.get_by_id(session=session, goal_id=goal_id)
     except NoResultFound:
@@ -177,7 +170,6 @@ async def update_post(
 
     try:
         assert content, "Необходимо загрузить фотографию"
-        assert len(content) == 1, "Нельзя загрузить более одной фотографии"
     except AssertionError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -185,12 +177,7 @@ async def update_post(
         )
 
     encoded_content = (
-        [
-            b64encode(await content_item.read()).decode("utf-8")
-            for content_item in content
-        ]
-        if content
-        else None
+        b64encode(await content.read()).decode("utf-8") if content else None
     )
 
     await goal.change(session=session, goal=payload, content=encoded_content)

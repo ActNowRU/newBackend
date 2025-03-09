@@ -16,9 +16,9 @@ from sqlalchemy import (
 )
 
 from app.database_initializer import Base
-from app.database.schemas.code import CodeCreateSchema
-from app.database.utils import create_model_instance
-from app.database.enums import CodeType
+from app.schemas.code import CodeCreateSchema
+from app.utils.db import create_model_instance
+from app.enums import CodeType
 
 DEFAULT_CODE_EXPIRATION = 60 * 5  # 5 minutes
 

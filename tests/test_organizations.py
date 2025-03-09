@@ -1,5 +1,4 @@
 import pytest
-import random
 
 
 EXPECTED_DATA_FOR_GET_PLACE = [
@@ -28,9 +27,9 @@ async def test_places(client, access_data):
     assert set_response.status_code == 200, set_response.json()
 
     places_response = await client.get("/organization/places/")
-    assert (
-        places_response.json() == EXPECTED_DATA_FOR_GET_PLACE
-    ), f"Response: {places_response.json()}, expected: {EXPECTED_DATA_FOR_GET_PLACE}"
+    assert places_response.json() == EXPECTED_DATA_FOR_GET_PLACE, (
+        f"Response: {places_response.json()}, expected: {EXPECTED_DATA_FOR_GET_PLACE}"
+    )
 
     get_counter_response = await client.get(
         "/organization/places/tests/caching_geopoint",
@@ -41,18 +40,18 @@ async def test_places(client, access_data):
     counter = get_counter_response.json()["counter"]
 
     places_response = await client.get("/organization/places/")
-    assert (
-        places_response.json() == EXPECTED_DATA_FOR_GET_PLACE
-    ), f"Response: {places_response.json()}, expected: {EXPECTED_DATA_FOR_GET_PLACE}"
+    assert places_response.json() == EXPECTED_DATA_FOR_GET_PLACE, (
+        f"Response: {places_response.json()}, expected: {EXPECTED_DATA_FOR_GET_PLACE}"
+    )
 
     get_counter_response = await client.get(
         "/organization/places/tests/caching_geopoint",
         headers={"Authorization": f"Bearer {access_data['access_token']}"},
     )
 
-    assert (
-        get_counter_response.status_code == 200
-    ), f"Status code: {get_counter_response.status_code}, expected: 200"
-    assert (
-        get_counter_response.json()["counter"] != counter + 1
-    ), f"Counter is: {get_counter_response.json()}, expected: {counter + 1}"
+    assert get_counter_response.status_code == 200, (
+        f"Status code: {get_counter_response.status_code}, expected: 200"
+    )
+    assert get_counter_response.json()["counter"] != counter + 1, (
+        f"Counter is: {get_counter_response.json()}, expected: {counter + 1}"
+    )

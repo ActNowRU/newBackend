@@ -3,8 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import HTTPException, Depends, status
 
 from app.database_initializer import get_db
-from app.database.models.user import User, Role
-from app.core.auth import decode_token
+from app.models.user import User, Role
+from app.auth.jwt import decode_token
 
 
 async def get_current_user(
@@ -30,15 +30,18 @@ async def get_current_user(
     return user
 
 
-async def is_user_organization_admin(user: User):
+async def verify_organization_admin(user: User):
     try:
         assert user.role == Role.org_admin
         assert user.organization_id
-
-        return True
     except AssertionError:
-        return False
-    
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не имеете доступа к данному ресурсу, "
+            "так как вы не являетесь администратором организации",
+        )
+
+
 async def is_user_service_admin(user: User):
     try:
         assert user.role == Role.admin
@@ -46,4 +49,3 @@ async def is_user_service_admin(user: User):
         return True
     except AssertionError:
         return False
-

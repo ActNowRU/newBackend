@@ -12,10 +12,10 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
-from app.database.models.user import User
-from app.database.models.organization import Organization, OrganizationType, Place
-from app.database.models.discount import Discount
-from app.database.schemas.organization import (
+from app.models.user import User
+from app.models.organization import Organization, OrganizationType, Place
+from app.models.discount import Discount
+from app.schemas.organization import (
     OrganizationSchema,
     OrganizationCreateSchema,
     OrganizationChangeSchema,
@@ -23,7 +23,7 @@ from app.database.schemas.organization import (
     SummaryPlaceSchema,
     VerbosePlaceSchema,
 )
-from app.database.schemas.user import (
+from app.schemas.user import (
     UserSchemaPublic,
 )
 
@@ -355,9 +355,7 @@ async def get_individual_discount(
 ):
     try:
         discount = await Discount.get_by_user_and_organization(
-            session=session,
-            user_id=user.id,
-            organization_id=organization_id
+            session=session, user_id=user.id, organization_id=organization_id
         )
         if not discount:
             raise HTTPException(
@@ -375,9 +373,15 @@ async def get_individual_discount(
 
         time_since_update = datetime.now() - discount.updated_at
         if time_since_update > timedelta(days=organization.days_to_step_back):
-            step = (organization.max_discount - organization.common_discount) / organization.step_amount
-            new_discount_percentage = max(discount.discount_percentage - step, organization.common_discount)
-            await discount.update_percentage(session=session, discount_percentage=new_discount_percentage)
+            step = (
+                organization.max_discount - organization.common_discount
+            ) / organization.step_amount
+            new_discount_percentage = max(
+                discount.discount_percentage - step, organization.common_discount
+            )
+            await discount.update_percentage(
+                session=session, discount_percentage=new_discount_percentage
+            )
 
         return {"discount_percentage": discount.discount_percentage}
     except NoResultFound:

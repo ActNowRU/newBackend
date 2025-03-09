@@ -19,13 +19,14 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
 )
 
-from app.core.auth import hash_password
-from app.database.schemas.user import UserCreateSchema
-from app.database.utils import create_model_instance
+from app.auth.password import hash_password
+from app.schemas.user import UserCreateSchema
+from app.utils.db import create_model_instance
 from app.database_initializer import Base
-from app.database.enums import Gender, Role
+from app.enums import Gender, Role
 
 import settings
+
 
 class User(Base):
     __tablename__ = "users"
@@ -54,6 +55,7 @@ class User(Base):
 
     stories = relationship("Story", back_populates="owner", lazy="selectin")
     codes = relationship("Code", back_populates="owner", lazy="selectin")
+    discounts = relationship("Discount", back_populates="user", lazy="selectin")
 
     UniqueConstraint("email", name="uq_user_email")
     PrimaryKeyConstraint("id", name="pk_user_id")

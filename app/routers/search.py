@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 
-from app.database.models.organization import OrganizationType, Place
+from app.models.organization import OrganizationType, Place
 
-from app.database.schemas.organization import SummaryPlaceSchema
+from app.schemas.organization import SummaryPlaceSchema
 
 
 router = APIRouter()

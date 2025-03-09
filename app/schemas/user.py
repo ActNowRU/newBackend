@@ -9,8 +9,8 @@ from pydantic import (
     field_validator,
 )
 
-from app.database.enums import Gender
-from app.database.schemas.story import StorySchema
+from app.enums import Gender
+from app.schemas.story import StorySchema
 from app.utils.alpha_validation import (
     is_latin,
     is_cyrillic,
@@ -71,8 +71,7 @@ class UserSchemaBase(BaseModel):
                     and value.replace(" ", "").isalpha()
                 )
                 assert is_name, (
-                    f"{info.field_name} must be either "
-                    "cyrillic or latin and no digits"
+                    f"{info.field_name} must be either cyrillic or latin and no digits"
                 )
         except AssertionError as error:
             raise ValueError(error)

@@ -15,8 +15,8 @@ from sqlalchemy import (
     DateTime,
 )
 
-from app.database.utils import create_model_instance
-from app.database.schemas.goal import GoalCreateSchema
+from app.utils.db import create_model_instance
+from app.schemas.goal import GoalCreateSchema
 from app.database_initializer import Base
 
 
@@ -112,7 +112,7 @@ class Goal(Base):
         return self
 
     async def delete(self, session: AsyncSession) -> None:
-        from app.database.models.story import Story
+        from app.models.story import Story
 
         stories = await Story.get_all_by_goal(session, goal_id=self.id)
 

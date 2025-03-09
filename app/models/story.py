@@ -17,10 +17,10 @@ from sqlalchemy import (
     DateTime,
 )
 
-from app.database.utils import create_model_instance
-from app.database.schemas.story import StoryCreateSchema, StoryChangeSchema
+from app.utils.db import create_model_instance
+from app.schemas.story import StoryCreateSchema, StoryChangeSchema
 from app.database_initializer import Base
-from app.database.enums import ModerationState
+from app.enums import ModerationState
 
 
 class Story(Base):
@@ -132,7 +132,7 @@ class Story(Base):
 
     @staticmethod
     async def get_favorite(session: AsyncSession, organization_id: int) -> dict:
-        from app.database.models.goal import Goal
+        from app.models.goal import Goal
 
         # Stories for this organization
         stories_by_organization_result = await session.execute(

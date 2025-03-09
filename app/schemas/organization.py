@@ -8,9 +8,9 @@ from pydantic import (
     field_validator,
 )
 
-from app.database.enums import OrganizationType
-from app.database.schemas.goal import GoalSchema
-from app.database.schemas.story import StorySchema
+from app.enums import OrganizationType
+from app.schemas.goal import GoalSchema
+from app.schemas.story import StorySchema
 from app.utils.alpha_validation import is_strong_password, SPECIAL_CHARS
 from app.utils.forms import as_form
 

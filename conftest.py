@@ -12,22 +12,16 @@ from pydantic import ValidationError
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 
-import sys
 import os
-import inspect
 
 # Set debug mode for successful testing (it should be before importing app modules)
 os.environ["DEBUG"] = "true"
 
-current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir)
-
-from exceptions import validation_error_handler  # noqa: E402
-from app.router import root_router  # noqa: E402
-from app.redis_initializer import get_redis  # noqa: E402
-from app.database_initializer import init_models  # noqa: E402
-
+from exceptions import validation_error_handler
+from app.router import root_router
+from app.redis_initializer import get_redis
+from app.database_initializer import init_models
+from create_superuser import create_superuser
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,8 +37,10 @@ async def app():
     async def lifespan(app: FastAPI):
         # Init anything on startup
         await init_models(clean=True)
+        await create_superuser("testadmin", "adminpasswD1$")
         redis = await get_redis(decode_responses=False)
         FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+
         yield
         # Clean up on shutdown
         # TODO: Add clean up
@@ -109,3 +105,14 @@ async def access_data(client: AsyncClient):
             )
 
     return response_log.json()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def access_data_admin(client: AsyncClient):
+    response = await client.post(
+        "/auth/login", data={"login": "testadmin", "password": "adminpasswD1$"}
+    )
+
+    logger.info(f"Admin login attempt: {response.status_code}, {response.json()}")
+
+    return response.json()

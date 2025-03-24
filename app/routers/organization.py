@@ -27,7 +27,7 @@ from app.schemas.user import (
     UserSchemaPublic,
 )
 
-from app.utils.auth import get_current_user, is_user_organization_admin
+from app.utils.auth import get_current_user, verify_organization_admin
 from app.services.geocoder import YandexGeocoder
 from settings import YANDEX_API_KEY
 
@@ -94,11 +94,7 @@ async def get_current_organization(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    if not await is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не являетесь администратором организации",
-        )
+    await verify_organization_admin(user)
 
     try:
         organization = await Organization.get_by_id(
@@ -133,30 +129,8 @@ async def info(
         )
 
 
-@router.get(
-    "/photo/{organization_id}",
-    response_model=dict,
-    summary="Get organization photo",
-    description="Get organization picture by id in base64",
-)
-async def organization_photo(
-    organization_id: str,
-    session: AsyncSession = Depends(get_db),
-):
-    try:
-        organization = await Organization.get_by_id(
-            session=session, organization_id=organization_id
-        )
-
-        return {"photo": organization.photo}
-    except NoResultFound:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Организация не найдена"
-        )
-
-
 @router.patch(
-    "/update",
+    "/",
     response_model=OrganizationSchema,
     summary="Update organization info",
     description="Update organization text info about their profile. Should be authorized as organization member",
@@ -166,20 +140,12 @@ async def update_organization_info(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not await is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не имеете доступа к данному ресурсу, "
-            "так как вы не являетесь администратором организации",
-        )
+    await verify_organization_admin(user)
 
     try:
-        organization = await Organization.get_by_id(
-            session=session, organization_id=user.organization_id
-        )
-
+        organization = user.organization
         organization = await organization.update(
-            session=session, organization=user.organization, schema=payload.model_dump()
+            session=session, updates=payload.model_dump()
         )
         return OrganizationSchema.model_validate(organization)
     except Exception as e:
@@ -190,8 +156,8 @@ async def update_organization_info(
         )
 
 
-@router.patch(
-    "/update/photo",
+@router.put(
+    "/photo",
     response_model=dict,
     summary="Update organization photo",
     description="Update organization profile photo. Should be authorized as organization member",
@@ -201,12 +167,7 @@ async def update_organization_photo(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not await is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не имеете доступа к данному ресурсу, "
-            "так как вы не являетесь администратором организации",
-        )
+    await verify_organization_admin(user)
 
     try:
         content = await photo.read()
@@ -238,12 +199,7 @@ async def set_organization_place(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not await is_user_organization_admin(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы не имеете доступа к данному ресурсу, "
-            "так как вы не являетесь администратором организации",
-        )
+    await verify_organization_admin(user)
 
     try:
         await Place.set(

@@ -45,7 +45,7 @@ async def create_new_story(
             detail="Нельзя создать историю без указания организации или голса, а также с указанием сразу обоих",
         )
 
-    if len(content) > 3 or not content:
+    if content is None or len(content) > 3:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Нельзя загружать менее одного или более 3 медиа-файлов",
@@ -73,6 +73,26 @@ async def create_new_story(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось создать историю",
         )
+
+
+@router.get(
+    "/me",
+    response_model=List[StorySchema],
+    summary="Get current user stories",
+    description="Get stories by current user. Should be authorized",
+)
+async def get_current_user_stories(
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        stories = await Story.get_all_by_owner(session, owner_id=user.id)
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Истории не найдены"
+        )
+
+    return [StorySchema.model_validate(story) for story in stories]
 
 
 @router.get(
@@ -119,7 +139,7 @@ async def get_all_organization_stories(
 
 
 @router.get(
-    "/by/user/{username}",
+    "/user/{username}",
     response_model=List[StorySchema],
     summary="Get user stories",
     description="Get stories by user. Should be authorized",
@@ -143,26 +163,6 @@ async def get_user_stories(
     return [StorySchema.model_validate(story) for story in stories]
 
 
-@router.get(
-    "/by/me",
-    response_model=List[StorySchema],
-    summary="Get current user stories",
-    description="Get stories by current user. Should be authorized",
-)
-async def get_current_user_stories(
-    session: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    try:
-        stories = await Story.get_all_by_owner(session, owner_id=user.id)
-    except NoResultFound:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Истории не найдены"
-        )
-
-    return [StorySchema.model_validate(story) for story in stories]
-
-
 @router.delete(
     "/{story_id}",
     summary="Delete story",
@@ -174,7 +174,7 @@ async def delete_story(
     user: User = Depends(get_current_user),
 ):
     try:
-        story = await Story.get_by_id(session, story_id=story_id)
+        story = await Story.get_by_id(session, story_id=story_id, private=True)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
@@ -192,7 +192,7 @@ async def delete_story(
 
 
 @router.patch(
-    "/change/{story_id}",
+    "/{story_id}",
     summary="Update story info",
     description="Update story. Should be authorized",
 )
@@ -204,7 +204,7 @@ async def update_story(
     user: User = Depends(get_current_user),
 ):
     try:
-        story = await Story.get_by_id(session, story_id=story_id)
+        story = await Story.get_by_id(session, story_id=story_id, private=True)
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="История не найдена"
@@ -216,10 +216,10 @@ async def update_story(
             detail="У вас нет прав на изменение этой истории",
         )
 
-    if len(content) > 3 or not content:
+    if content and len(content) > 3:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Нельзя загружать менее одного или более 3 медиа-файлов",
+            detail="Нельзя загружать более 3 медиа-файлов",
         )
 
     encoded_content = (
@@ -236,8 +236,8 @@ async def update_story(
     return {"detail": "История изменена"}
 
 
-@router.patch(
-    "/change/{story_id}/position/{position}",
+@router.put(
+    "/favorite",
     summary="Update story info",
     description="Set story position in the favorite list in organization. "
     "Up to 6. Should be authorized as organization member",
@@ -261,18 +261,16 @@ async def update_story_position(
             detail="У вас нет прав на изменение позиции этой истории в витрине отзывов",
         )
 
-    await story.change(
-        story_id=story_id, session=session, story={"position": position}, content=None
-    )
+    await story.change_position(session=session, position=position)
 
     return {"detail": "Позиция истории изменена"}
 
 
 @router.get(
     "/favorite/{organization_id}",
-    response_model=dict,
+    response_model=dict[int, StorySchema],
     summary="Get favorite stories [TESTING]",
-    description="Get favorite stories. Should be authorized. This is on testing, please use /story/organization/{organization_id} instead, to get all organization stories and filter them.",
+    description="Get favorite stories. Should be authorized.",
 )
 async def get_favorite_stories_by_organization(
     organization_id: int,
@@ -327,39 +325,49 @@ async def change_story_moderation_state_admin(
             detail="Вы не являетесь администратором сервиса.",
         )
     try:
-        story = await Story.get_by_id(session=session, story_id=story_id)
+        story = await Story.get_by_id(session=session, story_id=story_id, private=True)
 
         if story.moderation_state in (ModerationState.on_check, ModerationState.denied):
-            discount = await Discount.get_by_user_and_organization(
-                session=session,
-                user_id=story.owner_id,
-                organization_id=story.organization_id,
-            )
             organization = story.organization
-            step = (
-                organization.max_discount - organization.common_discount
-            ) / organization.step_amount
-            new_discount_percentage = step
+            if not organization:
+                organization = story.goal.organization
 
-            if discount:
-                new_discount_percentage = min(
-                    discount.discount_percentage + step, organization.max_discount
-                )
-                await discount.update_percentage(
-                    session=session, discount_percentage=new_discount_percentage
-                )
-            else:
-                await Discount.create(
+            if (
+                organization.max_discount
+                and organization.common_discount
+                and organization.step_amount
+            ):
+                step = (
+                    organization.max_discount - organization.common_discount
+                ) / organization.step_amount
+                new_discount_percentage = step
+
+                discount = await Discount.get_by_user_and_organization(
                     session=session,
                     user_id=story.owner_id,
                     organization_id=story.organization_id,
-                    discount_percentage=new_discount_percentage,
                 )
+
+                if discount:
+                    new_discount_percentage = min(
+                        discount.discount_percentage + step, organization.max_discount
+                    )
+                    await discount.update_percentage(
+                        session=session, discount_percentage=new_discount_percentage
+                    )
+                else:
+                    await Discount.create(
+                        session=session,
+                        user_id=story.owner_id,
+                        organization_id=story.organization_id,
+                        discount_percentage=new_discount_percentage,
+                    )
 
         await story.change_moderation_state(
             session=session, moderation_state=moderation_state
         )
-    except (IntegrityError, NoResultFound):
+    except (IntegrityError, NoResultFound) as error:
+        logging.error(error)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Perhaps, you specified wrong story ID or moderation state.",
@@ -371,30 +379,3 @@ async def change_story_moderation_state_admin(
             detail="Something Went Wrong",
         )
     return {"detail": "Состояние истории изменено"}
-
-
-@router.get(
-    "/discount/{organization_id}",
-    response_model=dict,
-    summary="Get user discount in organization",
-    description="Get the individual discount of the authorized user in a specific organization. Should be authorized",
-)
-async def get_user_discount(
-    organization_id: int,
-    session: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    try:
-        discount = await Discount.get_by_user_and_organization(
-            session=session, user_id=user.id, organization_id=organization_id
-        )
-        if not discount:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
-            )
-    except NoResultFound:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Скидка не найдена"
-        )
-
-    return {"discount_percentage": discount.discount_percentage}

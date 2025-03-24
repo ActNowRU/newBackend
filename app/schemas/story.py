@@ -10,8 +10,8 @@ from app.utils.forms import as_form
 class StoryCreateSchema(BaseModel):
     description: str = Form(...)
     is_recommending: bool = Form(...)
-    goal_id: int = Form(None)
-    organization_id: int = Form(None)
+    goal_id: Optional[int] = Form(None)
+    organization_id: Optional[int] = Form(None)
 
 
 class StorySchema(StoryCreateSchema):

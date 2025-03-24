@@ -25,6 +25,10 @@ alembic upgrade head
 alembic revision --autogenerate -m "another message"
 ```
 
+### Run tests
+
+`pytest`
+
 ### Server
 
 ###### Basic server usage

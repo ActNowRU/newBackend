@@ -6,7 +6,6 @@ from fastapi import (
     Depends,
     HTTPException,
     File,
-    Path,
     UploadFile,
     status,
 )
@@ -44,26 +43,8 @@ async def profile(
         )
 
 
-@router.get(
-    "/photo/{username}",
-    response_model=dict,
-    summary="Get user photo",
-    description="Get user profile picture by username in base64",
-)
-async def profile_photo(
-    username: str = Path(...),
-    session: AsyncSession = Depends(get_db),
-):
-    if user := await User.get_by_id_or_login(session=session, login=username):
-        return {"photo": user.photo}
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
-        )
-
-
 @router.patch(
-    "/update",
+    "/",
     response_model=UserSchema,
     summary="Update user info",
     description="Update user text info about their profile. Should be authorized",
@@ -84,8 +65,8 @@ async def update_user_info(
         )
 
 
-@router.patch(
-    "/update/photo",
+@router.put(
+    "/photo",
     response_model=dict,
     summary="Update user photo",
     description="Update user profile photo. Should be authorized",
@@ -109,8 +90,8 @@ async def update_user_photo(
         )
 
 
-@router.patch(
-    "/update/password/",
+@router.put(
+    "/password",
     response_model=UserSchema,
     summary="Update user password",
     description="Update user password. Should be authorized to prevent unsafe password changes",

@@ -1,12 +1,12 @@
 import logging
-
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 
 from app.models.organization import OrganizationType, Place
-
+from .organization import get_location
 from app.schemas.organization import SummaryPlaceSchema
 
 
@@ -14,17 +14,17 @@ router = APIRouter()
 
 
 @router.get(
-    "/places/{search_query}",
-    response_model=list[SummaryPlaceSchema],
-    status_code=status.HTTP_201_CREATED,
-    summary="Search places [TESTING]",
-    description="Search places by organization name or type. This is nearly untested, can response unexpected results.",
+    "/places",
+    response_model=List[SummaryPlaceSchema],
+    status_code=status.HTTP_200_OK,
+    summary="Search places",
+    description="Search places by organization name or type.",
 )
 async def search_places(
-    search_query: str | None = None,
-    organization_type: OrganizationType | None = None,
-    has_goals: bool | None = None,
-    has_discount: bool | None = None,
+    search_query: str = None,
+    organization_type: OrganizationType = None,
+    has_goals: bool = None,
+    has_discount: bool = None,
     session: AsyncSession = Depends(get_db),
 ):
     try:
@@ -36,9 +36,12 @@ async def search_places(
             has_discount=has_discount,
         )
 
-        print(places[0].__dict__)
-
-        return [SummaryPlaceSchema.model_validate(place) for place in places]
+        return [
+            SummaryPlaceSchema.model_validate(
+                {**place.__dict__, "location": await get_location(place.address)}
+            )
+            for place in places
+        ]
 
     except Exception as e:
         logging.error(e)

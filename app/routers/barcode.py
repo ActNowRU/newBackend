@@ -108,7 +108,7 @@ async def verify_code(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await verify_organization_admin()
+    await verify_organization_admin(user)
 
     try:
         code = await Code.get_by_value(session, value=value)

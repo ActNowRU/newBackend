@@ -40,4 +40,3 @@ async def init_models(clean=False) -> None:
             await conn.run_sync(Base.metadata.drop_all)
         logger.info("Initializing the database if it haven't been...")
         await conn.run_sync(Base.metadata.create_all)
-     

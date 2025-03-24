@@ -193,7 +193,7 @@ class Place(Base):
         orgs = orgs_result.scalars().all()
 
         if orgs:
-            orgs_ids = [org.id for org in orgs]
+            orgs_ids = set(org.id for org in orgs)
 
             places_result = await session.execute(
                 select(cls).filter(cls.organization_id.in_(orgs_ids))

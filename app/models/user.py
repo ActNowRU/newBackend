@@ -75,7 +75,11 @@ class User(Base):
         photo: bytes | None = None,
     ) -> "User":
         """Create a new user in the database."""
-        user_data = user_schema.model_dump()
+        if not isinstance(user_schema, dict):
+            user_data = user_schema.model_dump()
+        else:
+            user_data = user_schema
+
         user_data["role"] = role
 
         if settings.DEBUG:

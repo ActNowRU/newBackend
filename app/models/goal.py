@@ -48,7 +48,9 @@ class Goal(Base):
     owner = relationship("Organization", back_populates="goals", lazy="selectin")
 
     codes = relationship("Code", back_populates="goal", lazy="selectin")
-    stories = relationship("Story", back_populates="goal", lazy="selectin")
+    stories = relationship(
+        "Story", back_populates="goal", lazy="selectin", cascade="all, delete-orphan"
+    )
 
     def __str__(self):
         return f"Goal #{self.id}"
@@ -112,12 +114,5 @@ class Goal(Base):
         return self
 
     async def delete(self, session: AsyncSession) -> None:
-        from app.models.story import Story
-
-        stories = await Story.get_all_by_goal(session, goal_id=self.id)
-
-        for story in stories:
-            await session.delete(story)
-
         await session.delete(self)
         await session.commit()

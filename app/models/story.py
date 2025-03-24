@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 from sqlalchemy.orm import relationship
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import (
     Column,
@@ -18,7 +18,8 @@ from sqlalchemy import (
 )
 
 from app.utils.db import create_model_instance
-from app.schemas.story import StoryCreateSchema, StoryChangeSchema
+from app.schemas.story import StoryCreateSchema, StoryChangeSchema, StorySchema
+from app.models.goal import Goal
 from app.database_initializer import Base
 from app.types.enums import ModerationState
 
@@ -74,10 +75,16 @@ class Story(Base):
         return db_story
 
     @classmethod
-    async def get_by_id(cls, session: AsyncSession, story_id: int) -> "Story":
+    async def get_by_id(
+        cls, session: AsyncSession, story_id: int, private: bool = False
+    ) -> "Story":
         story_result = await session.execute(
             select(cls).filter(
-                cls.id == story_id & cls.moderation_state == ModerationState.allowed
+                and_(
+                    cls.id == story_id, cls.moderation_state == ModerationState.allowed
+                )
+                if not private
+                else cls.id == story_id
             )
         )
         return story_result.scalars().one()
@@ -95,11 +102,7 @@ class Story(Base):
         cls, session: AsyncSession, owner_id: int
     ) -> List["Story"]:
         stories_of_user_result = await session.execute(
-            select(cls).filter(
-                cls.owner_id
-                == owner_id & cls.moderation_state
-                == ModerationState.allowed
-            )
+            select(cls).filter(cls.owner_id == owner_id)
         )
 
         return stories_of_user_result.scalars().all()
@@ -110,25 +113,14 @@ class Story(Base):
     ) -> List["Story"]:
         stories_of_organization_result = await session.execute(
             select(cls).filter(
-                cls.goal.owner_id
-                == organization_id & cls.moderation_state
-                == ModerationState.allowed
+                and_(
+                    Goal.owner_id == organization_id,
+                    cls.moderation_state == ModerationState.allowed,
+                )
             )
         )
 
         return stories_of_organization_result.scalars().all()
-
-    @classmethod
-    async def get_all_by_goal(
-        cls, session: AsyncSession, goal_id: int
-    ) -> List["Story"]:
-        stories_of_goal_result = await session.execute(
-            select(cls).filter(
-                cls.goal_id == goal_id & cls.moderation_state == ModerationState.allowed
-            )
-        )
-
-        return stories_of_goal_result.scalars().all()
 
     @staticmethod
     async def get_favorite(session: AsyncSession, organization_id: int) -> dict:
@@ -156,7 +148,20 @@ class Story(Base):
 
         stories += stories_by_goal
 
-        return {story.position: story for story in stories if story.position}
+        return {
+            int(story.position): StorySchema.model_validate(story)
+            for story in stories
+            if story.position
+        }
+
+    async def change_position(self, session: AsyncSession, position: int) -> "Story":
+        """Change the position of the story in the favorite list."""
+        self.position = position
+
+        await session.commit()
+        await session.refresh(self)
+
+        return self
 
     async def delete(self, session: AsyncSession) -> None:
         await session.delete(self)
@@ -187,7 +192,8 @@ class Story(Base):
             if key not in ["owner_id", "goal_id", "organization_id"]:
                 setattr(self, key, value)
 
-        self.content = content
+        if content and any(content):
+            self.content = content
 
         await session.commit()
         await session.refresh(self)

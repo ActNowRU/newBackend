@@ -19,6 +19,7 @@ from app.schemas.story import (
 )
 
 from app.utils.auth import get_current_user, is_user_service_admin
+from app.models.code import Code
 
 
 router = APIRouter()
@@ -43,6 +44,25 @@ async def create_new_story(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Нельзя создать историю без указания организации или голса, а также с указанием сразу обоих",
+        )
+
+    # Check if the user has a scanned code for the goal or organization
+
+    if story.goal_id:
+        code = await Code.get_by_value(
+            session, value=f"T:1-N:{story.goal_id}-U:{user.id}"
+        )
+    elif story.organization_id:
+        code = await Code.get_by_value(
+            session, value=f"T:2-N:{story.organization_id}-U:{user.id}"
+        )
+    else:
+        code = None
+
+    if not code or code.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не можете создать историю для этого голса или организации",
         )
 
     if content is None or len(content) > 3:
@@ -327,21 +347,27 @@ async def change_story_moderation_state_admin(
     try:
         story = await Story.get_by_id(session=session, story_id=story_id, private=True)
 
-        if story.moderation_state in (ModerationState.on_check, ModerationState.denied):
-            organization = story.organization
-            if not organization:
-                organization = story.goal.organization
+        organization = story.organization
+        if not organization:
+            organization = story.goal.organization
+
+        if (
+            organization.max_discount
+            and organization.common_discount
+            and organization.step_amount
+        ):
+            step = (
+                organization.max_discount - organization.common_discount
+            ) / organization.step_amount
 
             if (
-                organization.max_discount
-                and organization.common_discount
-                and organization.step_amount
+                moderation_state == ModerationState.allowed
+                and story.moderation_state
+                in (
+                    ModerationState.on_check,
+                    ModerationState.denied,
+                )
             ):
-                step = (
-                    organization.max_discount - organization.common_discount
-                ) / organization.step_amount
-                new_discount_percentage = step
-
                 discount = await Discount.get_by_user_and_organization(
                     session=session,
                     user_id=story.owner_id,
@@ -359,9 +385,25 @@ async def change_story_moderation_state_admin(
                     await Discount.create(
                         session=session,
                         user_id=story.owner_id,
-                        organization_id=story.organization_id,
+                        organization_id=organization.id,
                         discount_percentage=new_discount_percentage,
                     )
+            elif (
+                moderation_state != ModerationState.allowed
+                and story.moderation_state == ModerationState.allowed
+            ):
+                discount = await Discount.get_by_user_and_organization(
+                    session=session,
+                    user_id=story.owner_id,
+                    organization_id=organization.id,
+                )
+
+                new_discount_percentage = max(
+                    discount.discount_percentage - step, organization.common_discount
+                )
+                await discount.update_percentage(
+                    session=session, discount_percentage=new_discount_percentage
+                )
 
         await story.change_moderation_state(
             session=session, moderation_state=moderation_state

@@ -255,34 +255,3 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(
 )
 async def get_current_authorized_user(user: User = Depends(get_current_user)):
     return UserSchema.model_validate(user)
-
-
-# from fastapi import Request
-# from services.core.vk.auth import get_vk_auth_url, get_vk_access_token
-#
-#
-# CLIENT_ID = "51901205"
-# CLIENT_SECRET = ""
-# REDIRECT_URL = "https://actnow.com"
-# PROTECTED_KEY = "MT3X7owJ2WODFv7YtlZR"
-#
-# router = APIRouter()
-#
-#
-# @router.get("/vk_login")
-# async def vk_auth_redirect(request: Request):
-#     code = request.query_params.get("code")
-#     if code is None:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Code not provided",
-#         )
-#     else:
-#         access_token_info = await gev_vk_access_token(client_id, client_secret, redirect_url, code)
-#         return access_token_info
-#
-#
-# @router.get("/get_vk_auth_url")
-# async def vk_auth_url():
-#     url = await get_vk_auth_url(CLIENT_ID, REDIRECT_URL)
-#     return {"url": url}

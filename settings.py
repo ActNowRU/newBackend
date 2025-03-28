@@ -46,6 +46,8 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 DEBUG = True if os.getenv("DEBUG") in ("true", "True") else False
 
+BASE_URL = "http://localhost:3000" if DEBUG else "https://do-goals.online"
+
 # =========================================================================================================
 # SMTP settings
 
@@ -80,3 +82,6 @@ else:
 # External services settings
 
 YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")

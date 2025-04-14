@@ -20,6 +20,7 @@ from app.schemas.user import (
     UserSchemaPublic,
     UserChangeSchema,
     UserChangePasswordSchema,
+    UserDeleteSchema,
 )
 
 router = APIRouter()
@@ -116,4 +117,31 @@ async def update_user_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось изменить пароль пользователя",
+        )
+
+
+@router.delete(
+    "/",
+    response_model=dict,
+    summary="Delete user",
+    description="Delete the user. Should be authorized.",
+)
+async def delete_user(
+    payload: UserDeleteSchema = Depends(),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not validate_password(user.hashed_password, payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный пароль"
+        )
+
+    try:
+        await user.delete(session=session)
+        return {"details": "Пользователь успешно удален"}
+    except Exception as e:
+        logging.error("Failed to delete user: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить пользователя",
         )

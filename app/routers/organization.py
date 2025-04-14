@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database_initializer import get_db
 from app.models.user import User
+from app.models.code import Code
 from app.models.organization import Organization, OrganizationType, Place
 from app.models.discount import Discount
 from app.schemas.organization import (
@@ -254,6 +255,22 @@ async def get_all_available_places(
     ]
 
     return formatted_places
+
+
+@router.get(
+    "/places/visited",
+    response_model=List[OrganizationSchema],
+    summary="Get visited by user places",
+    description="Get all places that user has visited.",
+)
+async def get_visited_places(
+    user_id: int,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    orgs = await Code.get_vizited_places_by_user(session, user_id=user_id)
+
+    return [OrganizationSchema.model_validate(org) for org in orgs]
 
 
 @router.get(

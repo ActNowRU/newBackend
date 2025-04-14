@@ -10,7 +10,6 @@ from app.models.user import User
 from app.models.organization import Organization
 
 from app.utils.auth import get_current_user, verify_organization_admin
-
 from app.database_initializer import get_db
 
 from barcode import Code128

@@ -140,9 +140,14 @@ class UserChangeSchema(UserSchemaBase):
 
 
 @as_form
-class UserChangePasswordSchema(UserSchemaBase):
+class UserChangePasswordSchema(BaseModel):
     old_password: str = Form(..., examples=["Qwerty123$"])
     new_password: str = Form(..., examples=["Qwerty123$"])
+
+
+@as_form
+class UserDeleteSchema(BaseModel):
+    password: str = Form(..., examples=["Qwerty123$"])
 
 
 class UserSchemaPublic(UserSchemaBase):

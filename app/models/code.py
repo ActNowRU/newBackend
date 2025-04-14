@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,6 +64,24 @@ class Code(Base):
         )
 
         return db_goal
+
+    async def get_vizited_places_by_user(
+        session: AsyncSession, user_id: int
+    ) -> List["Code"]:
+        db_codes_result = await session.execute(
+            select(Code).where((Code.owner_id == user_id) & (not Code.is_valid))
+        )
+        codes = db_codes_result.scalars().all()
+
+        organizations = []
+
+        for code in codes:
+            if code.organization:
+                organizations.append(code.organization)
+            elif code.goal and code.goal.organization:
+                organizations.append(code.goal.organization)
+
+        return organizations
 
     async def get_by_value(session: AsyncSession, value: int) -> "Code":
         db_code_result = await session.execute(select(Code).where(Code.value == value))

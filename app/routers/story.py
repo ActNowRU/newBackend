@@ -48,18 +48,22 @@ async def create_new_story(
 
     # Check if the user has a scanned code for the goal or organization
 
-    if story.goal_id:
-        code = await Code.get_by_value(
-            session, value=f"T:1-N:{story.goal_id}-U:{user.id}"
+    try:
+        if story.goal_id:
+            code = await Code.get_by_value(
+                session, value=f"T:1-N:{story.goal_id}-U:{user.id}"
+            )
+        elif story.organization_id:
+            code = await Code.get_by_value(
+                session, value=f"T:2-N:{story.organization_id}-U:{user.id}"
+            )
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы не можете создать историю для этого голса или организации",
         )
-    elif story.organization_id:
-        code = await Code.get_by_value(
-            session, value=f"T:2-N:{story.organization_id}-U:{user.id}"
-        )
-    else:
-        code = None
 
-    if not code or code.is_valid:
+    if code.is_valid:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Вы не можете создать историю для этого голса или организации",
@@ -86,6 +90,7 @@ async def create_new_story(
             content=encoded_content,
             owner_id=user.id,
         )
+        code.is_valid = True
         return {"detail": "История успешно создана"}
     except Exception as error:
         logging.error(error)

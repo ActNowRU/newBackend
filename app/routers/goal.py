@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,7 @@ from app.database_initializer import get_db
 
 from app.models.goal import Goal
 from app.models.user import User
-from app.schemas.goal import GoalCreateSchema, GoalSchema
+from app.schemas.goal import GoalCreateSchema, GoalUpdateSchema, GoalSchema
 
 from app.utils.auth import get_current_user, verify_organization_admin
 
@@ -48,47 +48,24 @@ def validate_datetime(dates, from_date, to_date, from_time, to_time):
     description="Create new goal in database. Should be authorized as organization member. ",
 )
 async def create_new_goal(
-    title: str = Form(...),
-    description: str = Form(...),
-    address: str = Form(...),
-    cost: int = Form(...),
-    prize_info: str = Form(None),
-    prize_conditions: List[str] = Form(None),
-    from_time: str = Form(None),
-    to_time: str = Form(None),
-    from_date: str = Form(None),
-    to_date: str = Form(None),
-    dates: List[str] = Form(None),
-    content: UploadFile = File(...),
+    # content: bytes = File(description="The cover for your goal"),
+    goal: GoalCreateSchema = Form(),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
     await verify_organization_admin(user)
 
-    validate_datetime(dates, from_date, to_date, from_time, to_time)
-
-    encoded_content = (
-        b64encode(await content.read()).decode("utf-8") if content else None
+    validate_datetime(
+        goal.dates, goal.from_date, goal.to_date, goal.from_time, goal.to_time
     )
 
-    goal = GoalCreateSchema(
-        title=title,
-        description=description,
-        address=address,
-        cost=cost,
-        prize_info=prize_info,
-        prize_conditions=prize_conditions,
-        from_time=from_time,
-        to_time=to_time,
-        from_date=from_date,
-        to_date=to_date,
-        dates=dates,
+    goal.content = (
+        b64encode(await goal.content.read()).decode("utf-8") if goal.content else None
     )
 
     await Goal.create(
         session=session,
         goal=goal,
-        content=encoded_content,
         owner_id=user.organization_id,
     )
 
@@ -141,18 +118,7 @@ async def get_goal(
 )
 async def update_post(
     goal_id: int,
-    title: str = Form(None),
-    description: str = Form(None),
-    address: str = Form(None),
-    cost: int = Form(None),
-    prize_info: str = Form(None),
-    prize_conditions: List[str] = Form(None),
-    from_time: str = Form(None),
-    to_time: str = Form(None),
-    from_date: str = Form(None),
-    to_date: str = Form(None),
-    dates: List[str] = Form(None),
-    content: UploadFile = File(None),
+    new_goal: GoalUpdateSchema = Form(),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -171,27 +137,21 @@ async def update_post(
             detail="У вас нет прав на изменение этого голса",
         )
 
-    validate_datetime(dates, from_date, to_date, from_time, to_time)
-
-    encoded_content = (
-        b64encode(await content.read()).decode("utf-8") if content else None
+    validate_datetime(
+        new_goal.dates,
+        new_goal.from_date,
+        new_goal.to_date,
+        new_goal.from_time,
+        new_goal.to_time,
     )
 
-    goal_data = GoalCreateSchema(
-        title=title,
-        description=description,
-        address=address,
-        cost=cost,
-        prize_info=prize_info,
-        prize_conditions=prize_conditions,
-        from_time=from_time,
-        to_time=to_time,
-        from_date=from_date,
-        to_date=to_date,
-        dates=dates,
+    new_goal.content = (
+        b64encode(await new_goal.content.read()).decode("utf-8")
+        if new_goal.content
+        else None
     )
 
-    await goal.change(session=session, goal=goal_data, content=encoded_content)
+    await goal.change(session=session, goal=new_goal)
 
     return {"detail": "Голс успешно изменен"}
 

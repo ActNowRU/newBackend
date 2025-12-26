@@ -14,8 +14,6 @@ async def check_token_status(token: str) -> bool:
 
     token_status = await redis.get(token)
 
-    if not token_status:
-        return True
     if token_status == REDIS_LOGOUT_VALUE:
         return False
 

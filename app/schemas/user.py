@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import Form
+from fastapi import UploadFile, File
 from pydantic import (
     BaseModel,
     EmailStr,
@@ -17,7 +17,8 @@ from app.utils.alpha_validation import (
     is_strong_password,
     SPECIAL_CHARS,
 )
-from app.utils.forms import as_form
+
+from pydantic import Field
 
 MIN_USERNAME_LENGTH = 4
 MAX_USERNAME_LENGTH = 20
@@ -112,37 +113,78 @@ class UserSchemaBase(BaseModel):
         return password
 
 
-@as_form
 class UserCreateSchema(UserSchemaBase):
-    first_name: Optional[str | None] = Form(None, examples=["John"])
-    username: str = Form(..., examples=["user123"])
-    email: EmailStr = Form(..., examples=["user@example.com"])
-    birth_date: Optional[date | None] = Form(None, examples=["2001-01-01"])
-    gender: Optional[Gender | None] = Form(None, examples=[""])
-    password: str = Form(..., examples=["Qwerty123$"])
+    first_name: Optional[str] = Field(
+        None, description="The first name of the user", examples=["John"]
+    )
+    username: str = Field(
+        ..., description="The username of the user", examples=["user123"]
+    )
+    email: EmailStr = Field(
+        ...,
+        description="The email address of the user",
+        examples=["user@example.com"],
+    )
+    birth_date: Optional[date] = Field(
+        None,
+        description="The birth date of the user in YYYY-MM-DD format",
+        examples=["2001-01-01"],
+    )
+    gender: Optional[Gender] = Field(
+        None, description="The gender of the user", examples=[""]
+    )
+    password: str = Field(
+        ..., description="The password of the user", examples=["Qwerty123$"]
+    )
+    photo: Optional[UploadFile] = File(None, description="Profile photo of the user")
 
 
-@as_form
 class UserLoginSchema(UserSchemaBase):
-    login: str | EmailStr = Form(..., examples=["user123"])
-    password: str = Form(..., examples=["Qwerty123$"])
-
-
-@as_form
-class UserChangeSchema(UserSchemaBase):
-    first_name: Optional[str | None] = Form(None, examples=["Kurt"])
-    username: Optional[str] = Form(None, examples=["nirvana123"])
-    birth_date: Optional[date] = Form(None, examples=["2001-01-01"])
-    gender: Optional[Gender | None] = Form(None, examples=["male"])
-    description: Optional[str] = Form(
-        None, examples=["I'm so happy, 'cause today I found my friends"]
+    login: str | EmailStr = Field(
+        ...,
+        description="The username or email address of the user",
+        examples=["user123"],
+    )
+    password: str = Field(
+        ..., description="The password of the user", examples=["Qwerty123$"]
     )
 
 
-@as_form
+class UserChangeSchema(UserSchemaBase):
+    first_name: Optional[str] = Field(
+        None,
+        description="The updated first name of the user",
+        examples=["Kurt"],
+    )
+    username: Optional[str] = Field(
+        None,
+        description="The updated username of the user",
+        examples=["nirvana123"],
+    )
+    birth_date: Optional[date] = Field(
+        None,
+        description="The updated birth date of the user in YYYY-MM-DD format",
+        examples=["2001-01-01"],
+    )
+    gender: Optional[Gender] = Field(
+        None, description="The updated gender of the user", examples=["male"]
+    )
+    description: Optional[str] = Field(
+        None,
+        description="The updated description of the user",
+        examples=["I'm so happy, 'cause today I found my friends"],
+    )
+
+
 class UserChangePasswordSchema(UserSchemaBase):
-    old_password: str = Form(..., examples=["Qwerty123$"])
-    new_password: str = Form(..., examples=["Qwerty123$"])
+    old_password: str = Field(
+        ...,
+        description="The current password of the user",
+        examples=["Qwerty123$"],
+    )
+    new_password: str = Field(
+        ..., description="The new password of the user", examples=["Qwerty123$"]
+    )
 
 
 class UserSchemaPublic(UserSchemaBase):

@@ -55,3 +55,55 @@ async def test_places(client, access_data):
     assert get_counter_response.json()["counter"] != counter + 1, (
         f"Counter is: {get_counter_response.json()}, expected: {counter + 1}"
     )
+
+
+@pytest.mark.asyncio
+async def test_set_organization_place(client, access_data):
+    # Test setting a new place for the organization
+    place_data = {
+        "name": "New Place",
+        "address": "123 New Street, City, Country",
+    }
+    response = await client.put(
+        "/organization/places/",
+        data=place_data,
+        headers={"Authorization": f"Bearer {access_data['access_token']}"},
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json().get("detail") == "Место успешно обновлено"
+
+
+@pytest.mark.asyncio
+async def test_get_all_places(client, access_data):
+    # Test retrieving all places
+    response = await client.get(
+        "/organization/places/",
+        headers={"Authorization": f"Bearer {access_data['access_token']}"},
+    )
+    assert response.status_code == 200, response.json()
+    assert isinstance(response.json(), list), "Response should be a list of places"
+
+
+@pytest.mark.asyncio
+async def test_get_place_by_id(client, access_data):
+    # Test retrieving a place by ID
+    response = await client.get(
+        "/organization/places/1",
+        headers={"Authorization": f"Bearer {access_data['access_token']}"},
+    )
+    assert response.status_code in [200, 404], response.json()
+    if response.status_code == 200:
+        assert "id" in response.json(), "Place ID is missing in the response"
+        assert "name" in response.json(), "Place name is missing in the response"
+
+
+@pytest.mark.asyncio
+async def test_get_available_organization_types(client, access_data):
+    # Test retrieving available organization types
+    response = await client.get(
+        "/organization/types/available",
+        headers={"Authorization": f"Bearer {access_data['access_token']}"},
+    )
+    assert response.status_code == 200, response.json()
+    assert isinstance(response.json(), list), "Response should be a list of types"
+    assert len(response.json()) > 0, "No organization types found"

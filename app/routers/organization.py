@@ -173,12 +173,11 @@ async def update_organization_photo(
         content = await photo.read()
         encoded_photo = b64encode(content)
 
-        organization = await Organization.get_by_id(
-            session=session, organization_id=user.organization_id
+        organization = user.organization
+        organization = await organization.update(
+            session=session, updates={"photo": encoded_photo}
         )
-        await organization.update(
-            session, organization=organization, schema={"photo": encoded_photo}
-        )
+
         return {"detail": "Фото организации успешно обновлено"}
     except Exception as e:
         logging.error("Failed to update user: %s", e)

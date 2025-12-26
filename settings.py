@@ -80,3 +80,7 @@ else:
 # External services settings
 
 YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
+
+# =========================================================================================================
+# Content settings
+ARTICLES_DIR = os.getenv("ARTICLES_DIR") or os.path.join(os.path.dirname(__file__), "content", "articles")

@@ -7,6 +7,7 @@ from fastapi import (
     HTTPException,
     File,
     UploadFile,
+    Form,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +51,7 @@ async def profile(
     description="Update user text info about their profile. Should be authorized",
 )
 async def update_user_info(
-    payload: UserChangeSchema = Depends(),
+    payload: UserChangeSchema = Form(),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -72,7 +73,7 @@ async def update_user_info(
     description="Update user profile photo. Should be authorized",
 )
 async def update_user_photo(
-    photo: UploadFile = File(...),
+    photo: UploadFile = File(..., description="New user profile photo"),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -97,7 +98,7 @@ async def update_user_photo(
     description="Update user password. Should be authorized to prevent unsafe password changes",
 )
 async def update_user_password(
-    payload: UserChangePasswordSchema = Depends(),
+    payload: UserChangePasswordSchema = Form(),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):

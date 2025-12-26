@@ -60,14 +60,12 @@ class Goal(Base):
         cls,
         session: AsyncSession,
         goal: GoalCreateSchema,
-        content: List[bytes],
         owner_id: int,
     ) -> "Goal":
         db_goal = await create_model_instance(
             session=session,
             model=cls,
             **goal.model_dump(),
-            content=content,
             owner_id=owner_id,
             created_at=datetime.now(),
         )
@@ -100,13 +98,10 @@ class Goal(Base):
         self,
         session: AsyncSession,
         goal: GoalCreateSchema,
-        content: List[bytes],
     ) -> "Goal":
         for key, value in goal.model_dump().items():
             if key != "owner_id":
                 setattr(self, key, value)
-
-        self.content = content
 
         await session.commit()
         await session.refresh(self)

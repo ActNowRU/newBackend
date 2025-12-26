@@ -2,7 +2,7 @@ from typing import Dict
 from base64 import b64encode
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from pydantic import BaseModel
@@ -36,27 +36,23 @@ router = APIRouter()
     description="Create new user in database",
 )
 async def signup(
-    payload: UserCreateSchema = Depends(),
-    photo: UploadFile = File(None),
+    user: UserCreateSchema = Form(),
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        if photo:
-            content = await photo.read()
-            encoded_photo = b64encode(content)
-        else:
-            encoded_photo = None
+        if user.photo:
+            content = await user.photo.read()
+            user.photo = b64encode(content)
 
-        if user := await User.get_by_id_or_login(session=session, login=payload.email):
-            if user.is_email_confirmed:
+        if old_user := await User.get_by_id_or_login(session=session, login=user.email):
+            if old_user.is_email_confirmed:
                 raise ValueError
             else:
-                await user.delete(session=session)
+                await old_user.delete(session=session)
 
         user = await User.create(
             session=session,
-            user_schema=payload,
-            photo=encoded_photo,
+            user_schema=user,
             role=Role.consumer,
         )
 
@@ -151,7 +147,7 @@ class RefreshedAccessTokenSchema(BaseModel):
     description="Authenticate user and obtain JWT pair of access and refresh tokens",
 )
 async def login(
-    payload: UserLoginSchema = Depends(),
+    payload: UserLoginSchema = Form(),
     session: AsyncSession = Depends(get_db),
 ):
     user = await User.get_by_id_or_login(session=session, login=payload.login)

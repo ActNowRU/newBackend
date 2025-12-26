@@ -72,7 +72,6 @@ class User(Base):
         session: AsyncSession,
         user_schema: UserCreateSchema,
         role: str,
-        photo: bytes | None = None,
     ) -> "User":
         """Create a new user in the database."""
         if not isinstance(user_schema, dict):
@@ -87,7 +86,7 @@ class User(Base):
 
         user_data["hashed_password"] = hash_password(user_data.pop("password"))
 
-        user = await create_model_instance(session, model=cls, **user_data, photo=photo)
+        user = await create_model_instance(session, model=cls, **user_data)
 
         return user
 

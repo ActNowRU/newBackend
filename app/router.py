@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
-from app.routers import user, goal, auth, organization, barcode, search
-from app.routers import story
+from app.routers import user, goal, auth, organization, barcode, search, story
 
 root_router = APIRouter(prefix="/api")
 
